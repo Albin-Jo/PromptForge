@@ -22,7 +22,9 @@ export interface SseEvent {
 export function parseSseFrame(frame: string): SseEvent | null {
   let event = "message";
   const dataLines: string[] = [];
-  for (const line of frame.split("\n")) {
+  // Lines may be terminated by LF, CR, or CRLF (SSE spec); split on any of them so a
+  // CRLF stream doesn't leave a trailing "\r" on each field for trim() to mop up.
+  for (const line of frame.split(/\r\n|\r|\n/)) {
     if (line.startsWith("event:")) {
       event = line.slice("event:".length).trim();
     } else if (line.startsWith("data:")) {
@@ -49,12 +51,26 @@ export function createSseParser() {
     push(chunk: string): SseEvent[] {
       buffer += chunk;
       const events: SseEvent[] = [];
-      let sep: number;
-      // Frames are separated by a blank line. We assume LF ("\n\n"), which matches our
-      // gateway's output; a CRLF server ("\r\n\r\n") would need that handled too.
-      while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      // Frames are separated by a blank line. Our gateway emits LF ("\n\n"); a CRLF proxy
+      // emits "\r\n\r\n", which contains no "\n\n" substring — so we look for both and take
+      // whichever boundary comes first. We do NOT handle bare-CR ("\r\r") or mixed boundaries
+      // ("\n\r\n"); the SSE spec permits them, but no source we talk to produces them.
+      for (;;) {
+        const lf = buffer.indexOf("\n\n");
+        const crlf = buffer.indexOf("\r\n\r\n");
+        let sep: number;
+        let len: number;
+        if (crlf !== -1 && (lf === -1 || crlf < lf)) {
+          sep = crlf;
+          len = 4;
+        } else if (lf !== -1) {
+          sep = lf;
+          len = 2;
+        } else {
+          break;
+        }
         const frame = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
+        buffer = buffer.slice(sep + len);
         const event = parseSseFrame(frame);
         if (event) events.push(event);
       }

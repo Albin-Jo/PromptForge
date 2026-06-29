@@ -23,6 +23,19 @@ describe("DiffView", () => {
     expect(added[0].textContent).toContain("new");
   });
 
+  it("colors the +/- gutter so the cue survives a faint row tint (dark mode)", () => {
+    const { container } = render(<DiffView oldText="old" newText="new" />);
+    expect(container.querySelector('[data-diff-type="added"] .text-success')).not.toBeNull();
+    expect(container.querySelector('[data-diff-type="removed"] .text-destructive')).not.toBeNull();
+  });
+
+  it("wraps long content rather than clipping it", () => {
+    const { container } = render(<DiffView oldText="a" newText={"x".repeat(400)} />);
+    const cell = container.querySelector('[data-diff-type="added"] .whitespace-pre-wrap');
+    expect(cell).not.toBeNull();
+    expect(cell?.className).toContain("break-words");
+  });
+
   it("shows the version labels in the header", () => {
     render(<DiffView oldText="a" newText="b" oldLabel="v3" newLabel="v4" />);
     expect(screen.getByText(/v3/)).toBeInTheDocument();

@@ -92,6 +92,22 @@ describe("streamCompletion", () => {
     expect(h.onToken).not.toHaveBeenCalled();
   });
 
+  it("maps specific gateway statuses to actionable messages", async () => {
+    const cases: [number, RegExp][] = [
+      [429, /rate limited/i],
+      [401, /authentication/i],
+      [403, /authentication/i],
+      [504, /too long/i],
+    ];
+    for (const [status, pattern] of cases) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("nope", { status })));
+      const h = handlers();
+      await streamCompletion(body, h);
+      expect(h.onError).toHaveBeenCalledOnce();
+      expect(h.onError.mock.calls[0][0]).toMatch(pattern);
+    }
+  });
+
   it("treats a user abort as a non-error (silent)", async () => {
     const abortErr = Object.assign(new Error("aborted"), { name: "AbortError" });
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortErr));

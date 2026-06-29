@@ -38,6 +38,24 @@ describe("createSseParser", () => {
     expect(events).toEqual([{ event: "token", data: { content: "He" } }]);
   });
 
+  it("handles CRLF frame boundaries", () => {
+    const parser = createSseParser();
+    const events = parser.push(
+      'event: token\r\ndata: {"content":"a"}\r\n\r\nevent: done\r\ndata: {}\r\n\r\n',
+    );
+    expect(events.map((e) => e.event)).toEqual(["token", "done"]);
+    expect(events[0].data).toEqual({ content: "a" });
+  });
+
+  it("buffers a CRLF frame split across two chunks", () => {
+    const parser = createSseParser();
+    // The split lands inside the "\r\n\r\n" boundary -> nothing emitted yet.
+    expect(parser.push('event: token\r\ndata: {"content":"He"}\r\n')).toEqual([]);
+    const events = parser.push("\r\nevent: done\r\ndata: {}\r\n\r\n");
+    expect(events.map((e) => e.event)).toEqual(["token", "done"]);
+    expect(events[0].data).toEqual({ content: "He" });
+  });
+
   it("parses an error event", () => {
     const parser = createSseParser();
     const events = parser.push('event: error\ndata: {"type":"GatewayError","detail":"boom"}\n\n');

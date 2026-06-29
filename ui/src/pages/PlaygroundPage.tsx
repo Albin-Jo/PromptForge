@@ -127,15 +127,22 @@ export function PlaygroundPage() {
           <h2 className="text-sm font-medium text-foreground">Inputs</h2>
 
           <label className="mt-3 block text-sm text-muted-foreground">
-            Model
+            <span>
+              Model <span className="text-destructive" aria-hidden="true">*</span>
+            </span>
             <Input
               type="text"
+              required
+              aria-required="true"
               value={model}
               onChange={(e) => setModel(e.target.value)}
               placeholder="openai/gpt-4o-mini"
               className="mt-1"
             />
           </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Required — e.g. {"openai/gpt-4o-mini"}. Run stays disabled until a model is set.
+          </p>
 
           {version.input_variables.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">This version takes no variables.</p>

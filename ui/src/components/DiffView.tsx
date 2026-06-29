@@ -22,6 +22,14 @@ const SIGILS: Record<DiffLine["type"], string> = {
   removed: "-",
 };
 
+// Color the +/- gutter so the add/remove cue carries even where the 10%-opacity row tint
+// is hard to read (notably dark mode). The glyph still differs, so this isn't color-only.
+const SIGIL_STYLES: Record<DiffLine["type"], string> = {
+  context: "text-muted-foreground",
+  added: "text-success",
+  removed: "text-destructive",
+};
+
 // Unified line diff (one column, +/- gutters) — deliberately simple per the sprint's
 // "resist a diff-library rabbit hole" note. Side-by-side is a later polish if wanted.
 export function DiffView({ oldText, newText, oldLabel, newLabel }: DiffViewProps) {
@@ -53,7 +61,11 @@ export function DiffView({ oldText, newText, oldLabel, newLabel }: DiffViewProps
               <td className="w-10 select-none border-r border-border px-2 py-0.5 text-right text-muted-foreground">
                 {line.newNumber ?? ""}
               </td>
-              <td className="w-5 select-none px-1 py-0.5 text-center">{SIGILS[line.type]}</td>
+              <td
+                className={`w-5 select-none px-1 py-0.5 text-center font-semibold ${SIGIL_STYLES[line.type]}`}
+              >
+                {SIGILS[line.type]}
+              </td>
               <td className="whitespace-pre-wrap break-words px-2 py-0.5">{line.text || " "}</td>
             </tr>
           ))}

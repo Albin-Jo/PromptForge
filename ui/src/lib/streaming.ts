@@ -36,6 +36,27 @@ export interface CompletionRequestBody {
   config: CompletionConfig;
 }
 
+/**
+ * Turn a non-2xx status from /complete into an actionable message. These statuses arrive
+ * on the response *before* the stream opens (auth, rate limit, gateway timeout), so they
+ * never reach the in-stream `error` event — we map them here. Unmapped statuses keep the
+ * raw number so an unexpected failure is still diagnosable.
+ */
+export function messageForStatus(status: number): string {
+  switch (status) {
+    case 429:
+      return "Rate limited — wait a moment and retry.";
+    case 401:
+    case 403:
+      return "Authentication problem — check the gateway's provider API key.";
+    case 408:
+    case 504:
+      return "The model took too long to respond. Try again.";
+    default:
+      return `Stream failed (HTTP ${status}).`;
+  }
+}
+
 /** Stream a completion, invoking handlers as SSE events arrive. Resolves when the stream ends. */
 export async function streamCompletion(
   body: CompletionRequestBody,
@@ -61,7 +82,7 @@ export async function streamCompletion(
   }
 
   if (!response.ok || !response.body) {
-    handlers.onError(`Stream failed (HTTP ${response.status}).`);
+    handlers.onError(messageForStatus(response.status));
     return;
   }
 

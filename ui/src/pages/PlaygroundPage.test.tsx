@@ -89,6 +89,29 @@ describe("PlaygroundPage", () => {
     );
   });
 
+  it("marks the model field as required", () => {
+    renderPage();
+    const modelInput = screen.getByLabelText(/model/i);
+    expect(modelInput).toBeRequired();
+    expect(screen.getByText(/required —/i)).toBeInTheDocument();
+  });
+
+  it("disables Run when the model is blank and re-enables it once set", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const runButton = screen.getByRole("button", { name: /^run$/i });
+    const modelInput = screen.getByLabelText(/model/i);
+
+    // Seeded from the version's model_settings -> Run is enabled.
+    expect(runButton).toBeEnabled();
+
+    await user.clear(modelInput);
+    expect(runButton).toBeDisabled();
+
+    await user.type(modelInput, "openai/gpt-4o-mini");
+    expect(runButton).toBeEnabled();
+  });
+
   it("shows an error when the stream reports one", async () => {
     mockedStream.mockImplementation(async (_body, handlers: StreamHandlers) => {
       handlers.onError("provider exploded");

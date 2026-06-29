@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PromptEditorForm } from "./PromptEditorForm";
 import type { PromptFormValues } from "./PromptEditorForm";
@@ -81,16 +81,68 @@ describe("PromptEditorForm", () => {
     );
 
     await user.type(screen.getByLabelText(/name/i), "summarize");
-    await user.type(screen.getByLabelText(/content/i), "Summarize the document");
+    // Content references both placeholders so declared == detected (Save stays enabled).
+    // Set via fireEvent: userEvent.type treats "{{" as a key-descriptor escape.
+    fireEvent.change(screen.getByLabelText(/content/i), {
+      target: { value: "Summarize {{text}} in a {{tone}} tone" },
+    });
     await user.type(screen.getByLabelText(/input variables/i), " text , tone , text ");
     await user.click(screen.getByRole("button", { name: /create prompt/i }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const values = onSubmit.mock.calls[0][0];
     expect(values.name).toBe("summarize");
-    expect(values.content).toBe("Summarize the document");
+    expect(values.content).toBe("Summarize {{text}} in a {{tone}} tone");
     // Trimmed + de-duped ("text" appears twice -> once).
     expect(values.inputVariables).toEqual(["text", "tone"]);
+  });
+
+  it("shows detected variables and blocks Save on a declared/detected mismatch", async () => {
+    const onSubmit = vi.fn<(v: PromptFormValues) => void>();
+    const user = userEvent.setup();
+    render(
+      <PromptEditorForm
+        mode="create"
+        initial={emptyInitial}
+        submitting={false}
+        errorMessage={null}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    // A placeholder with no matching declaration -> undeclared warning + disabled Save.
+    fireEvent.change(screen.getByLabelText(/content/i), { target: { value: "Use {{text}}" } });
+    expect(screen.getByText("{{text}}")).toBeInTheDocument(); // detected chip
+    const save = screen.getByRole("button", { name: /create prompt/i });
+    expect(save).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/not declared/i);
+
+    // Declaring it clears the mismatch and re-enables Save.
+    await user.type(screen.getByLabelText(/input variables/i), "text");
+    expect(save).toBeEnabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("soft-warns (does not block Save) when a composed block can't be resolved", () => {
+    const onSubmit = vi.fn<(v: PromptFormValues) => void>();
+    render(
+      <PromptEditorForm
+        mode="create"
+        initial={{ ...emptyInitial, inputVariables: ["extra"] }}
+        // version 1 isn't in the mocked catalog (only version 2 is) -> unresolved block.
+        blocks={[{ block: "guardrails", version: 1 }]}
+        submitting={false}
+        errorMessage={null}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    // "extra" is declared but used by neither the (empty) body nor a resolvable block.
+    // Because a block couldn't be resolved, this is a *soft* warning, not a hard block.
+    const warning = screen.getByRole("status");
+    expect(warning).toHaveTextContent(/possibly unused/i);
+    expect(warning).toHaveTextContent(/couldn.t be resolved/i);
+    expect(screen.getByRole("button", { name: /create prompt/i })).toBeEnabled();
   });
 
   it("renders the existing composition as editable rows", () => {
