@@ -1,0 +1,53 @@
+# Pre-commit guardrails. Install once with: uv run pre-commit install
+# Run on everything with:    uv run pre-commit run --all-files
+minimum_pre_commit_version: "4.0.0"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+
+  # Ruff: lint (with autofix) then format. Order matters — fixes first, format last.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # mypy --strict. pass_filenames=false so it uses the [tool.mypy] `files`/
+  # explicit_package_bases config and type-checks the whole src tree coherently.
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        pass_filenames: false
+        args: ["--config-file=pyproject.toml"]
+        # The hook runs in an isolated env, so it needs the libraries our typed
+        # code imports (and pydantic for the mypy plugin). Keep in sync with
+        # api/ runtime deps as they grow.
+        additional_dependencies:
+          - "fastapi>=0.115"
+          - "pydantic>=2"
+          - "pydantic-settings>=2.6"
+          - "structlog>=24.4"
+          - "sqlalchemy>=2.0"
+          - "tenacity>=9.0"
+          - "types-jsonschema"
+          # httpx (typed) is the SDK's HTTP client; redis (typed) backs the server cache.
+          - "httpx>=0.27"
+          # celery[redis] pulls in the worker's transport AND pins redis to the same <7
+          # range the project resolves — without it the isolated hook installs a newer
+          # redis whose tighter `incr` typing makes our (still-needed) cast look redundant.
+          - "celery[redis]>=5.4"
+          - "redis>=6.0,<7"
+          # Human auth (Sprint 13): both PyJWT and bcrypt ship their own types (py.typed),
+          # so mypy needs the packages themselves, no separate stubs.
+          - "pyjwt>=2.10"
+          - "bcrypt>=4.1"

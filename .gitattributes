@@ -1,0 +1,11 @@
+# Normalize line endings: store LF in the repo, check out LF everywhere.
+# Keeps the editor, pre-commit hooks, and Linux containers from fighting over CRLF.
+* text=auto eol=lf
+
+# Binary/asset types must never be normalized.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.lock linguist-generated=true

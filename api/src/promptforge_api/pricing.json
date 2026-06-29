@@ -1,0 +1,8 @@
+{
+  "openai/gpt-4o-mini": { "input_per_1m": 0.15, "output_per_1m": 0.60 },
+  "openai/gpt-4o": { "input_per_1m": 2.50, "output_per_1m": 10.00 },
+  "openai/gpt-4.1-mini": { "input_per_1m": 0.40, "output_per_1m": 1.60 },
+  "openai/gpt-4.1": { "input_per_1m": 2.00, "output_per_1m": 8.00 },
+  "anthropic/claude-3-5-haiku-20241022": { "input_per_1m": 0.80, "output_per_1m": 4.00 },
+  "anthropic/claude-3-5-sonnet-20241022": { "input_per_1m": 3.00, "output_per_1m": 15.00 }
+}

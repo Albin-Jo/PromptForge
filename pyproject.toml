@@ -1,0 +1,125 @@
+[project]
+name = "promptforge-workspace"
+version = "0.0.0"
+description = "PromptForge monorepo workspace root (not published)."
+requires-python = ">=3.13"
+
+# The workspace root is a non-publishable aggregator. Runtime dependencies live
+# in each member's own pyproject (api/, worker/, sdk/); only shared dev tooling
+# lives here so every package is linted and type-checked identically.
+
+[tool.uv.workspace]
+members = ["api", "worker", "sdk"]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "pre-commit>=4.0",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",
+    "testcontainers>=4.8",
+    "types-jsonschema>=4.23",
+]
+
+# --- Ruff: single source of truth for formatting + linting across all members ---
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["api/src", "worker/src", "sdk/src"]
+# Alembic autogenerates these version scripts to its own template (old typing
+# style, long DDL lines). We review them for correctness, not style — excluding
+# them keeps generated migrations from tripping the linter. Hand-written Alembic
+# files (env.py) live outside versions/ and stay linted.
+extend-exclude = ["api/migrations/versions"]
+
+[tool.ruff.lint]
+# A pragmatic-but-strict starting set; we widen rules as the codebase grows.
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import ordering)
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["promptforge", "promptforge_api", "promptforge_worker"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use assert; conftest must set an env var before importing
+# testcontainers (E402), which is legitimate test bootstrapping.
+"**/tests/**" = ["S101", "E402"]
+
+# --- pytest ---
+[tool.pytest.ini_options]
+testpaths = ["api/tests", "worker/tests", "sdk/tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
+# Auto mode: async def test functions are run on an event loop without each
+# needing an @pytest.mark.asyncio decorator. Sync tests are unaffected.
+asyncio_mode = "auto"
+
+# --- mypy: strict, applied to every member's source ---
+[tool.mypy]
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+files = ["api/src", "worker/src", "sdk/src"]
+mypy_path = ["api/src", "worker/src", "sdk/src"]
+namespace_packages = true
+explicit_package_bases = true
+
+# litellm ships only partial type info and doesn't re-export its exception classes,
+# so mypy would flag every `litellm.RateLimitError` etc. The gateway deliberately
+# treats litellm as an untyped boundary (our own Completion/GatewayError types are
+# what callers see), so skip following it rather than scattering inline ignores.
+[[tool.mypy.overrides]]
+module = ["litellm"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# Celery ships no py.typed marker, so mypy can't analyse it. We treat it as an
+# untyped boundary (like litellm): our own typed wrappers — the producer client and
+# the task functions — are what the rest of the code sees.
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*", "kombu"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# Celery's @app.task and @signal.connect are untyped decorators (no stubs), which under
+# --strict would flag the decorated functions as "untyped". The function bodies are still
+# type-checked; only the decorator check is relaxed, and only where we use those decorators.
+[[tool.mypy.overrides]]
+module = [
+    "promptforge_worker.tasks",
+    "promptforge_worker.signals",
+    "promptforge_api.celery_client",
+]
+disallow_untyped_decorators = false
+
+# The eval frameworks (ragas, deepeval) and langchain ship partial/no type info. The worker's
+# scorer adapters treat them as an untyped boundary — like litellm — wrapping their calls in our
+# own typed Score/Scorer surface. Skip following them rather than scatter inline ignores; the
+# adapter bodies are still type-checked against our types.
+[[tool.mypy.overrides]]
+module = ["ragas.*", "deepeval.*", "langchain_core.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# The two adapter LLMs subclass ragas/deepeval bases that mypy sees as untyped (per the override
+# above), so --strict flags subclassing-untyped and untyped-decorator on them. The method bodies
+# are still checked; only those base-class-driven checks are relaxed, and only in this module.
+[[tool.mypy.overrides]]
+module = ["promptforge_worker.evals.gateway_llm"]
+disallow_subclassing_any = false
+disallow_untyped_decorators = false

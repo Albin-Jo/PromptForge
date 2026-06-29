@@ -1,0 +1,61 @@
+[project]
+name = "promptforge-worker"
+version = "0.1.0"
+description = "PromptForge Celery worker(s)."
+requires-python = ">=3.13"
+dependencies = [
+    # Off-request-path task execution. The [redis] extra pulls the Redis transport
+    # used for BOTH the broker and the result backend (separate logical DBs — see
+    # promptforge_worker/config.py). Pinned >=5.4 for the modern (Celery 5.x) API.
+    "celery[redis]>=5.4",
+    # Worker config is loaded from the environment the same 12-factor way the API
+    # does it — its own small Settings object, not an import of the API's.
+    "pydantic-settings>=2.6",
+    # Structured JSON logs, matching the API; the request_id is propagated from the
+    # submitting request into the task via task headers (see celery_app.py).
+    "structlog>=24.4",
+    # Flower — the web dashboard for inspecting tasks/queues/retries (the Sprint 6 demo).
+    # It runs as its own compose service from this image (celery ... flower); the worker
+    # process itself never imports it, so this is image weight only, not runtime overhead.
+    "flower>=2.0",
+    # Sprint 8: the worker now RUNS evals, so it depends on the API package as the shared
+    # domain library — importing only its domain/service layers (db, gateway, templating,
+    # evals), never its routers/main (ADR 0011). This is the worker→api dependency arrow;
+    # the reverse (api→worker) stays forbidden so the API image never pulls the eval libs
+    # below. FastAPI/uvicorn ride along here as negligible weight next to ragas/deepeval;
+    # carving them into an api `[server]` extra is filed as a future cleanup, not done now.
+    "promptforge-api",
+    # The eval task reads runs/datasets/versions and writes scores directly, so it talks to
+    # Postgres itself. These arrive transitively via promptforge-api's core deps, but the
+    # worker imports them directly — declare them so the dependency is honest, not implicit.
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    # The two external eval frameworks wrapped behind our Scorer Protocol this sprint. They
+    # co-resolve with our litellm/pydantic pins (Sprint 8 install spike), but pull a large
+    # transitive tree (langchain/langgraph, datasets, pandas, pyarrow…) — hence they live in
+    # the WORKER image only, which is exactly why the api↛worker boundary matters (ADR 0011).
+    "ragas>=0.4",
+    "deepeval>=4.0",
+    # Constraint pins for a ragas packaging bug (Sprint 8 install spike): ragas 0.4.3 declares
+    # its langchain deps with NO upper bound, so the resolver pulls langchain 1.x — but ragas's
+    # own code still imports the pre-1.0 `langchain_community.chat_models.vertexai` shim that the
+    # 1.0 reorg deleted, so `import ragas` then crashes. Pin the stack back to the <1.0 line where
+    # that path still exists. We don't import langchain directly; these only exist to constrain a
+    # misbehaving transitive dep of ragas. deepeval doesn't use langchain, so this is isolated.
+    "langchain<1.0",
+    "langchain-core<1.0",
+    "langchain-community<0.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/promptforge_worker"]
+
+# Resolve promptforge-api from the local workspace member, not PyPI (it isn't published).
+# Mirrors how uv links the other members; without this, `promptforge-api` above would be
+# looked up on the index and fail.
+[tool.uv.sources]
+promptforge-api = { workspace = true }

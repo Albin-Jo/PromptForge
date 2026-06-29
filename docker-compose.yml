@@ -1,0 +1,153 @@
+# PromptForge local stack.
+#
+# `docker compose up` brings up the full headless platform on one network: postgres +
+# redis, a one-shot `migrate` that applies the schema, then api + worker + flower. The
+# api/worker wait for `migrate` to finish, so the database is always ready before they
+# serve. Provide a `.env` (copy `.env.example`) — compose reads POSTGRES_* and any
+# optional provider keys from it.
+#
+# Project name fixes the network as `promptforge_default`, which the in-network
+# health check in the README relies on.
+name: promptforge
+
+services:
+  # One-shot schema migration: runs `alembic upgrade head` and exits. The api/worker
+  # depend on its successful completion, so neither ever talks to an unmigrated DB.
+  # Uses the api image (which ships alembic.ini + migrations and has alembic installed).
+  migrate:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: promptforge-api:dev
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge}@postgres:5432/${POSTGRES_DB:-promptforge}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: promptforge-api:dev
+    ports:
+      - "8000:8000"
+    environment:
+      PROMPTFORGE_ENVIRONMENT: local
+      PROMPTFORGE_LOG_LEVEL: INFO
+      # Reachable by service name on the compose network. `+psycopg` selects the psycopg
+      # v3 driver the app ships (a bare postgresql:// would resolve to psycopg2, absent here).
+      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge}@postgres:5432/${POSTGRES_DB:-promptforge}
+      PROMPTFORGE_REDIS_URL: redis://redis:6379/0
+      # Celery transport (Sprint 6). The API is a producer only — it enqueues by name
+      # and reads results by id. Broker on Redis DB 1, results on DB 2, kept separate
+      # from the hot-prompt cache (DB 0) so no component's flush clobbers another's keys.
+      PROMPTFORGE_CELERY_BROKER_URL: redis://redis:6379/1
+      PROMPTFORGE_CELERY_RESULT_BACKEND: redis://redis:6379/2
+      # Optional: forwarded to the gateway so the eval/playground paths can call a real
+      # provider. Unset is fine — the registry/render/trace/metrics demo needs no key.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # python (stdlib only) instead of curl/wget — the slim image ships neither.
+    # urlopen raises a non-zero exit on any non-2xx response, failing the check.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # Celery worker — consumes the broker queue and runs work off the API's request
+  # path. Same Redis as the API; broker DB 1, result backend DB 2. Runs on Linux here,
+  # so the default prefork pool's os.fork() works (the --pool=solo caveat is Windows-
+  # local only). Concurrency/queue routing are tuned later in Sprint 6.
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    image: promptforge-worker:dev
+    environment:
+      PROMPTFORGE_LOG_LEVEL: INFO
+      PROMPTFORGE_CELERY_BROKER_URL: redis://redis:6379/1
+      PROMPTFORGE_CELERY_RESULT_BACKEND: redis://redis:6379/2
+      # Sprint 8: the worker now RUNS evals, so it reads runs/datasets/versions and writes
+      # scores directly. It reuses the API's engine (ADR 0011), which reads this same var.
+      # `+psycopg` for the same reason as the api — the v3 driver the app ships.
+      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge}@postgres:5432/${POSTGRES_DB:-promptforge}
+      # Optional provider key for eval generation/scoring; unset is fine for a keyless demo.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # Liveness via Celery's own ping: round-trips a control message through the broker to
+    # any worker that answers, confirming the process is up AND the broker is reachable.
+    # No -d destination: this is exec form (no shell), so $HOSTNAME wouldn't expand and a
+    # literal celery@$HOSTNAME would match no node. Pinging all workers is the right
+    # liveness check anyway — exit 0 iff a worker replied.
+    healthcheck:
+      test: ["CMD", "celery", "-A", "promptforge_worker.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Flower — web dashboard for tasks/queues/workers (http://localhost:5555). Runs from
+  # the worker image (version-matched to our Celery) and reads task events the worker
+  # emits (worker_send_task_events). Open locally; in prod, gate it with --basic-auth.
+  flower:
+    image: promptforge-worker:dev
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: ["celery", "-A", "promptforge_worker.celery_app", "flower", "--port=5555"]
+    ports:
+      - "5555:5555"
+    environment:
+      PROMPTFORGE_CELERY_BROKER_URL: redis://redis:6379/1
+      PROMPTFORGE_CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    # Defaults make `docker compose up` work with no .env at all; override any of them by
+    # exporting the var or putting it in a .env file (compose reads it automatically).
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-promptforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-promptforge}
+      POSTGRES_DB: ${POSTGRES_DB:-promptforge}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-promptforge} -d ${POSTGRES_DB:-promptforge}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

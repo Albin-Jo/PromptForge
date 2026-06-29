@@ -65,11 +65,15 @@ desktop.ini
 !.vscode/extensions.json
 !.vscode/settings.json
 
-# ---- Claude Code ----
-# Keep shared project config & commands; ignore personal local overrides
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
+# ---- Local DBs (throwaway/dev data) ----
+*.sqlite
+*.sqlite3
+*.db
+
+# ---- Project planning & Claude config (kept private, not published) ----
 sprint/
 docs/
 demo/
+CLAUDE.md
 .claude/
+.dockerignore
