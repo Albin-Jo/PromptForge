@@ -9,6 +9,8 @@ import { PromptEditorPage } from "./pages/PromptEditorPage";
 import { VersionHistoryPage } from "./pages/VersionHistoryPage";
 import { PlaygroundPage } from "./pages/PlaygroundPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { RunsPage } from "./pages/RunsPage";
+import { TracesPage } from "./pages/TracesPage";
 import { ScanResultsPage } from "./pages/ScanResultsPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { DatasetListPage } from "./pages/DatasetListPage";
@@ -40,6 +42,7 @@ export function App() {
           <Route path="prompts/:name/edit" element={<PromptEditorPage />} />
           <Route path="prompts/:name/versions" element={<VersionHistoryPage />} />
           <Route path="prompts/:name/dashboard" element={<DashboardPage />} />
+          <Route path="prompts/:name/traces" element={<TracesPage />} />
           <Route
             path="prompts/:name/versions/:versionNumber/playground"
             element={<PlaygroundPage />}
@@ -47,6 +50,10 @@ export function App() {
           <Route
             path="prompts/:name/versions/:versionNumber/scan"
             element={<ScanResultsPage />}
+          />
+          <Route
+            path="prompts/:name/versions/:versionNumber/runs"
+            element={<RunsPage />}
           />
           {/* Admin-only sections: gated by role, not just hidden in nav (Sprint 16g). */}
           <Route element={<RequireAdmin />}>

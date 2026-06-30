@@ -49,6 +49,10 @@ DEFAULT_GATING_SCORERS: list[dict[str, Any]] = [{"scorer": "llm_judge"}]
 # The enqueue side: given a freshly-created run id, put it on the eval queue.
 EvalSubmit = Callable[[uuid.UUID], None]
 
+# Eval runs per version are low-volume (a handful of re-runs), so the history list caps at a
+# fixed depth newest-first rather than paginating — far simpler, and enough for the audit view.
+DEFAULT_RUN_HISTORY_LIMIT = 50
+
 
 @dataclass(frozen=True)
 class DatasetItemInput:
@@ -219,6 +223,14 @@ class EvalService:
             latest_run_id=latest.id if latest is not None else None,
             summary=latest.summary if latest is not None else None,
         )
+
+    def list_version_runs(
+        self, *, prompt_name: str, version_number: int, limit: int = DEFAULT_RUN_HISTORY_LIMIT
+    ) -> list[EvalRun]:
+        """A version's eval runs, newest first — the audit history behind the latest status."""
+        prompt = self._require_prompt(prompt_name)
+        version = self._require_version(prompt, prompt_name, version_number)
+        return self._evals.list_runs_for_version(version.id, limit=limit)
 
     def latest_completed_run(self, prompt_version_id: uuid.UUID) -> EvalRun | None:
         """The most recent completed run for a version (the gate's source of scores)."""

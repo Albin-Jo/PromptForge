@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api";
 import { pollWhilePending } from "../polling";
-import type { ScanAccepted, ScanStatus, VersionScanStatus } from "./types";
+import type { ScanAccepted, ScanRunSummary, ScanStatus, VersionScanStatus } from "./types";
 
 /** A scan is still in flight (so a poller should keep watching) while pending or running. */
 export function isScanRunning(status: ScanStatus): boolean {
@@ -10,6 +10,7 @@ export function isScanRunning(status: ScanStatus): boolean {
 
 export const scanKeys = {
   detail: (name: string, versionNumber: number) => ["scan", name, versionNumber] as const,
+  runs: (name: string, versionNumber: number) => ["scan-runs", name, versionNumber] as const,
 };
 
 export function getVersionScan(
@@ -19,6 +20,18 @@ export function getVersionScan(
 ): Promise<VersionScanStatus> {
   return apiFetch<VersionScanStatus>(
     `/prompts/${encodeURIComponent(name)}/versions/${versionNumber}/scan`,
+    { signal },
+  );
+}
+
+/** A version's scans, newest first — the audit history behind the latest status. */
+export function listVersionScans(
+  name: string,
+  versionNumber: number,
+  signal?: AbortSignal,
+): Promise<ScanRunSummary[]> {
+  return apiFetch<ScanRunSummary[]>(
+    `/prompts/${encodeURIComponent(name)}/versions/${versionNumber}/scans`,
     { signal },
   );
 }
@@ -60,6 +73,25 @@ export function useVersionScan(
     enabled: Boolean(name) && versionNumber !== undefined,
     refetchInterval: options.poll
       ? pollWhilePending<VersionScanStatus>((d) => isScanRunning(d.status))
+      : undefined,
+  });
+}
+
+/**
+ * Server-state hook for a version's scan run history (newest first). Disabled until both args.
+ * Pass `{ poll: true }` to keep the list fresh while any scan in it is still in flight.
+ */
+export function useVersionScans(
+  name: string | undefined,
+  versionNumber: number | undefined,
+  options: { poll?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: scanKeys.runs(name ?? "", versionNumber ?? -1),
+    queryFn: ({ signal }) => listVersionScans(name as string, versionNumber as number, signal),
+    enabled: Boolean(name) && versionNumber !== undefined,
+    refetchInterval: options.poll
+      ? pollWhilePending<ScanRunSummary[]>((scans) => scans.some((s) => isScanRunning(s.status)))
       : undefined,
   });
 }

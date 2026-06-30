@@ -43,3 +43,15 @@ export interface EvalRunAccepted {
   eval_run_id: string;
   status: string;
 }
+
+// Mirrors EvalRunSummary — one row in a version's eval run-history list (newest first).
+// `summary` is the run's own aggregate rollup (same shape as a completed VersionEvalStatus's),
+// present once it completes and null while pending/running or on failure.
+export interface EvalRunSummary {
+  id: string;
+  status: EvalStatus;
+  scorers: string[];
+  created_at: string;
+  completed_at: string | null;
+  summary: EvalSummary | null;
+}

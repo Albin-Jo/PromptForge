@@ -22,6 +22,7 @@ from promptforge_api.exceptions import (
     EmptyGoldenSetError,
     GoldenSetMissingError,
     PromptNotFoundError,
+    TraceNotFoundError,
     VersionNotFoundError,
 )
 from promptforge_api.services.auth import UserAlreadyExistsError
@@ -48,6 +49,7 @@ _logger = structlog.get_logger(__name__)
 _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     PromptNotFoundError: status.HTTP_404_NOT_FOUND,
     VersionNotFoundError: status.HTTP_404_NOT_FOUND,
+    TraceNotFoundError: status.HTTP_404_NOT_FOUND,
     LabelNotFoundError: status.HTTP_404_NOT_FOUND,
     PromptAlreadyExistsError: status.HTTP_409_CONFLICT,
     VariableContractError: status.HTTP_422_UNPROCESSABLE_CONTENT,

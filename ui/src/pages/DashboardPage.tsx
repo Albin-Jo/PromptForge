@@ -1,5 +1,5 @@
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { LineChart, Play, ShieldCheck } from "lucide-react";
+import { History, LineChart, Play, ShieldCheck } from "lucide-react";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { PromptTabs } from "../components/PromptTabs";
 import { AlertsPanel } from "../components/AlertsPanel";
@@ -39,6 +39,11 @@ function LatestVersionActions({ name, latest }: { name: string; latest: number }
         <Button asChild size="sm" variant="outline">
           <Link to={`/prompts/${base}/versions/${latest}/scan`}>
             <ShieldCheck /> Scan
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to={`/prompts/${base}/versions/${latest}/runs`}>
+            <History /> Runs
           </Link>
         </Button>
         <Button

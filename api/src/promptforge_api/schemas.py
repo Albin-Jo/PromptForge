@@ -454,6 +454,23 @@ class EvalStatusResponse(BaseModel):
     summary: dict[str, Any] | None
 
 
+class EvalRunSummary(BaseModel):
+    """One historical eval run, for the per-version run-history list (newest first).
+
+    The ``summary`` is the run's own aggregate rollup (same shape as
+    ``EvalStatusResponse.summary``) — present once the run completes, ``None`` while it is
+    still pending/running or if it failed. ``scorers`` is the scorer *names* this run graded
+    with, lifted out of the stored ``scorer_config`` so the list needn't unpack the config.
+    """
+
+    id: uuid.UUID
+    status: str
+    scorers: list[str]
+    created_at: datetime
+    completed_at: datetime | None
+    summary: dict[str, Any] | None
+
+
 class ScanAccepted(BaseModel):
     """Response to a manually triggered security scan: the scan id created (status ``pending``)."""
 
@@ -471,6 +488,62 @@ class ScanStatusResponse(BaseModel):
     latest_scan_id: uuid.UUID | None
     risk_level: str | None
     findings: list[dict[str, Any]] | None
+
+
+class ScanRunSummary(BaseModel):
+    """One historical security scan, for the per-version scan-history list (newest first).
+
+    Carries the full ``findings`` list (same shape as ``ScanStatusResponse.findings``) so the
+    drill-in into a scan needs no second call — the list's finding *count* is derived from it.
+    ``findings`` / ``risk_level`` are ``None`` while the scan is pending/running or if it failed.
+    """
+
+    id: uuid.UUID
+    status: str
+    scanners: list[str]
+    risk_level: str | None
+    findings: list[dict[str, Any]] | None
+    created_at: datetime
+    completed_at: datetime | None
+
+
+class TraceSummary(BaseModel):
+    """One execution in the trace list (newest first) — the lean row, no rendered text.
+
+    Deliberately excludes ``input``/``output`` (the heavy columns): the list shows cost/latency/
+    status/model only, and the full rendered prompt + output load on the single-trace detail.
+    ``cost_usd`` is an exact decimal string (never a float) for the same money-precision reason as
+    the metrics endpoints.
+    """
+
+    id: uuid.UUID
+    prompt_id: uuid.UUID | None
+    prompt_version_id: uuid.UUID | None
+    source: str | None
+    provider: str | None
+    model: str
+    cost_usd: str | None
+    latency_ms: int | None
+    status: str
+    created_at: datetime
+
+
+class TraceDetail(TraceSummary):
+    """One execution in full — the debugging drill-down: the rendered prompt + model output.
+
+    Extends the summary with everything a single trace carries: the rendered ``input`` and model
+    ``output`` (either may be absent if the emitter omitted it), token counts, the served model,
+    the failure type on an errored call, and the correlation ``request_id``.
+    """
+
+    provider_model: str | None
+    request_id: str | None
+    input: str | None
+    output: str | None
+    input_tokens: int | None
+    output_tokens: int | None
+    total_tokens: int | None
+    error_type: str | None
 
 
 class RenderResponse(BaseModel):

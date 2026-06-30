@@ -40,6 +40,10 @@ _logger = structlog.get_logger(__name__)
 # The enqueue side: given a freshly-created scan id, put it on the scans queue.
 ScanSubmit = Callable[[uuid.UUID], None]
 
+# Scans per version are low-volume (one on save, plus a few re-runs), so the history list caps at
+# a fixed depth newest-first rather than paginating — mirrors the eval run history.
+DEFAULT_SCAN_HISTORY_LIMIT = 50
+
 
 @dataclass(frozen=True)
 class ScanStatusView:
@@ -101,6 +105,14 @@ class ScanService:
             risk_level=latest.risk_level if latest is not None else None,
             findings=latest.findings if latest is not None else None,
         )
+
+    def list_version_scans(
+        self, *, prompt_name: str, version_number: int, limit: int = DEFAULT_SCAN_HISTORY_LIMIT
+    ) -> list[SecurityScan]:
+        """A version's scans, newest first — the audit history behind the latest status."""
+        prompt = self._require_prompt(prompt_name)
+        version = self._require_version(prompt, prompt_name, version_number)
+        return self._scans.list_for_version(version.id, limit=limit)
 
     def latest_completed_scan(self, prompt_version_id: uuid.UUID) -> SecurityScan | None:
         """The most recent completed scan for a version (the gate's source of risk_level)."""

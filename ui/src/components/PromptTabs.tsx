@@ -12,6 +12,7 @@ export function PromptTabs({ name }: { name: string }) {
     { to: `/prompts/${base}/edit`, label: "Editor" },
     { to: `/prompts/${base}/versions`, label: "Versions" },
     { to: `/prompts/${base}/dashboard`, label: "Dashboard" },
+    { to: `/prompts/${base}/traces`, label: "Traces" },
   ];
 
   return (
