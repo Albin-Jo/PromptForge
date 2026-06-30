@@ -51,26 +51,28 @@ export function DiffView({ oldText, newText, oldLabel, newLabel }: DiffViewProps
           <span className="text-success">+ {newLabel}</span>
         </div>
       )}
-      <table className="w-full border-collapse font-mono text-xs">
-        <tbody>
-          {lines.map((line, idx) => (
-            <tr key={idx} className={ROW_STYLES[line.type]} data-diff-type={line.type}>
-              <td className="w-10 select-none border-r border-border px-2 py-0.5 text-right text-muted-foreground">
-                {line.oldNumber ?? ""}
-              </td>
-              <td className="w-10 select-none border-r border-border px-2 py-0.5 text-right text-muted-foreground">
-                {line.newNumber ?? ""}
-              </td>
-              <td
-                className={`w-5 select-none px-1 py-0.5 text-center font-semibold ${SIGIL_STYLES[line.type]}`}
-              >
-                {SIGILS[line.type]}
-              </td>
-              <td className="whitespace-pre-wrap break-words px-2 py-0.5">{line.text || " "}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse font-mono text-xs">
+          <tbody>
+            {lines.map((line, idx) => (
+              <tr key={idx} className={ROW_STYLES[line.type]} data-diff-type={line.type}>
+                <td className="w-10 select-none border-r border-border px-2 py-0.5 text-right text-muted-foreground">
+                  {line.oldNumber ?? ""}
+                </td>
+                <td className="w-10 select-none border-r border-border px-2 py-0.5 text-right text-muted-foreground">
+                  {line.newNumber ?? ""}
+                </td>
+                <td
+                  className={`w-5 select-none px-1 py-0.5 text-center font-semibold ${SIGIL_STYLES[line.type]}`}
+                >
+                  {SIGILS[line.type]}
+                </td>
+                <td className="whitespace-pre-wrap break-words px-2 py-0.5">{line.text || " "}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

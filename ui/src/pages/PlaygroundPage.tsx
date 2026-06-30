@@ -184,7 +184,7 @@ export function PlaygroundPage() {
             {output}
             {status === "streaming" && <span className="animate-pulse">▋</span>}
           </pre>
-          {runError && <p className="mt-2 text-sm text-destructive">{runError}</p>}
+          {runError && <p role="alert" className="mt-2 text-sm text-destructive">{runError}</p>}
         </div>
       </div>
     </div>

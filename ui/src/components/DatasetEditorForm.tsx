@@ -86,13 +86,15 @@ function CsvImportSection({ onPopulate }: CsvImportSectionProps) {
       </div>
 
       {parsed.errors.length > 0 && (
-        <ul className="mt-2 space-y-1" aria-label="Import errors">
-          {parsed.errors.map((err, i) => (
-            <li key={i} className="text-xs text-destructive">
-              {err.message}
-            </li>
-          ))}
-        </ul>
+        <div role="alert">
+          <ul className="mt-2 space-y-1" aria-label="Import errors">
+            {parsed.errors.map((err, i) => (
+              <li key={i} className="text-xs text-destructive">
+                {err.message}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {preview.length > 0 ? (
@@ -309,7 +311,7 @@ export function DatasetEditorForm({
         </Button>
       </div>
 
-      {errorMessage && <p className="mt-4 text-sm text-destructive">{errorMessage}</p>}
+      {errorMessage && <p role="alert" className="mt-4 text-sm text-destructive">{errorMessage}</p>}
 
       <Button type="submit" disabled={submitting || usableCases === 0} className="mt-6">
         {submitting

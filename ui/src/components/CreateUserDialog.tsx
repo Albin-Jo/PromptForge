@@ -135,7 +135,7 @@ export function CreateUserDialog() {
             </select>
           </label>
 
-          {errors.form && <p className="text-destructive text-sm">{errors.form}</p>}
+          {errors.form && <p role="alert" className="text-destructive text-sm">{errors.form}</p>}
 
           <DialogFooter>
             <Button type="submit" disabled={createUser.isPending}>

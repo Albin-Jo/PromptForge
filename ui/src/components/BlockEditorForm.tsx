@@ -150,7 +150,7 @@ export function BlockEditorForm({
 
       <CompositionEditor value={composition} onChange={setComposition} />
 
-      {errorMessage && <p className="mt-4 text-sm text-destructive">{errorMessage}</p>}
+      {errorMessage && <p role="alert" className="mt-4 text-sm text-destructive">{errorMessage}</p>}
 
       <Button type="submit" disabled={submitting} className="mt-6">
         {submitting ? "Saving…" : mode === "create" ? "Create block" : "Save new version"}
