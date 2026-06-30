@@ -28,7 +28,7 @@ export function UsersPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Users</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
         <CreateUserDialog />
       </div>
       <p className="mt-1 text-sm text-muted-foreground">

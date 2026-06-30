@@ -47,6 +47,23 @@ describe("buildBreadcrumbs", () => {
     ]);
   });
 
+  it("maps the traces page to a Traces leaf", () => {
+    expect(buildBreadcrumbs("/prompts/greet/traces")).toEqual([
+      { label: "Prompts", to: "/prompts" },
+      { label: "greet", to: "/prompts/greet/edit" },
+      { label: "Traces" },
+    ]);
+  });
+
+  it("maps the version runs page to a Runs leaf", () => {
+    expect(buildBreadcrumbs("/prompts/greet/versions/3/runs")).toEqual([
+      { label: "Prompts", to: "/prompts" },
+      { label: "greet", to: "/prompts/greet/versions" },
+      { label: "Version 3" },
+      { label: "Runs" },
+    ]);
+  });
+
   it("maps the golden-sets list to a plain crumb", () => {
     expect(buildBreadcrumbs("/datasets")).toEqual([{ label: "Golden sets" }]);
   });
@@ -95,6 +112,10 @@ describe("buildBreadcrumbs", () => {
 
   it("maps the users page", () => {
     expect(buildBreadcrumbs("/users")).toEqual([{ label: "Users" }]);
+  });
+
+  it("maps the activity (audit log) page", () => {
+    expect(buildBreadcrumbs("/activity")).toEqual([{ label: "Audit log" }]);
   });
 
   it("falls back to Overview for an unknown route", () => {

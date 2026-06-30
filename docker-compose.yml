@@ -84,6 +84,10 @@ services:
       PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge}@postgres:5432/${POSTGRES_DB:-promptforge}
       # Optional provider key for eval generation/scoring; unset is fine for a keyless demo.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # deepeval tries to create a .deepeval dir in CWD at import time (telemetry.py).
+      # CWD is /app, which the non-root app user can't write to. This env var skips the
+      # makedirs call and disables the telemetry phone-home — correct for a container.
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
     depends_on:
       postgres:
         condition: service_healthy
@@ -117,8 +121,27 @@ services:
     environment:
       PROMPTFORGE_CELERY_BROKER_URL: redis://redis:6379/1
       PROMPTFORGE_CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DEEPEVAL_TELEMETRY_OPT_OUT: "YES"
     depends_on:
       redis:
+        condition: service_healthy
+
+  # React dashboard — Vite static bundle served by nginx (http://localhost:3000).
+  # The VITE_API_BASE_URL build arg is baked into the JS at image build time; it must
+  # be the URL the *browser* uses to reach the API, so localhost:8000 is correct here
+  # because the API's port is published on the host. Override for non-local deployments:
+  #   docker compose build --build-arg VITE_API_BASE_URL=https://api.example.com ui
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    image: promptforge-ui:dev
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
         condition: service_healthy
 
   postgres:
