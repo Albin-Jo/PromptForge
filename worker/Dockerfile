@@ -28,8 +28,12 @@ COPY sdk/pyproject.toml sdk/pyproject.toml
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-workspace --package promptforge-worker
 
-# 2) Project layer — bring in the worker source and install the package as a wheel
-#    (--no-editable) so the runtime stage needs only the venv, not the source tree.
+# 2) Project layer — bring in the worker source AND the api source (workspace dep)
+#    and install both as wheels (--no-editable). api/src is required here because
+#    promptforge-api is declared as { workspace = true } in worker/pyproject.toml;
+#    without it, uv cannot build the promptforge-api wheel and the container crashes
+#    with ModuleNotFoundError: No module named 'promptforge_api'.
+COPY api/src api/src
 COPY worker/src worker/src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable --package promptforge-worker

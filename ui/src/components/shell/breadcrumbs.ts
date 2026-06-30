@@ -23,9 +23,9 @@ export function buildBreadcrumbs(pathname: string): Crumb[] {
     const encodedName = segments[1] ?? "";
     const name = safeDecode(encodedName);
 
-    // ["prompts", name, "edit"|"versions"|"dashboard"]
+    // ["prompts", name, "edit"|"versions"|"dashboard"|"traces"]
     if (segments.length === 3) {
-      const leaf = { edit: "Editor", versions: "Versions", dashboard: "Dashboard" }[
+      const leaf = { edit: "Editor", versions: "Versions", dashboard: "Dashboard", traces: "Traces" }[
         segments[2]
       ];
       trail.push({ label: name, to: `/prompts/${encodedName}/edit` });
@@ -33,9 +33,9 @@ export function buildBreadcrumbs(pathname: string): Crumb[] {
       return trail;
     }
 
-    // ["prompts", name, "versions", v, "playground"|"scan"]
+    // ["prompts", name, "versions", v, "playground"|"scan"|"runs"]
     if (segments.length === 5 && segments[2] === "versions") {
-      const leaf = { playground: "Playground", scan: "Scan" }[segments[4]];
+      const leaf = { playground: "Playground", scan: "Scan", runs: "Runs" }[segments[4]];
       trail.push({ label: name, to: `/prompts/${encodedName}/versions` });
       trail.push({ label: `Version ${segments[3]}` });
       trail.push({ label: leaf ?? segments[4] });
@@ -91,6 +91,7 @@ export function buildBreadcrumbs(pathname: string): Crumb[] {
   }
 
   if (segments[0] === "users") return [{ label: "Users" }];
+  if (segments[0] === "activity") return [{ label: "Audit log" }];
 
   return [{ label: "Overview" }];
 }
