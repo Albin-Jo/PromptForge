@@ -6,6 +6,12 @@ function qualityFill(v: number): string {
   return "bg-success";
 }
 
+function qualityLabel(v: number): string {
+  if (v < 0.5) return "poor";
+  if (v < 0.8) return "fair";
+  return "good";
+}
+
 // A thin 0–1 quality bar with its formatted value, shared by the eval and observability
 // surfaces (16d dedup — these were two drifting copies). App component, not a ui/ primitive,
 // because it knows about our quality formatting.
@@ -19,7 +25,10 @@ export function QualityBar({ value }: { value: number | null }) {
           style={{ width: `${Math.round(value * 100)}%` }}
         />
       </div>
-      <span className="text-muted-foreground tabular-nums">{formatQuality(value)}</span>
+      <span className="text-muted-foreground tabular-nums">
+        {formatQuality(value)}
+        <span className="sr-only"> ({qualityLabel(value)})</span>
+      </span>
     </div>
   );
 }

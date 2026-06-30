@@ -39,6 +39,7 @@ interface TrendChartProps {
   tooltipLabelFormatter?: (value: unknown) => string;
   tooltipValueFormatter?: (value: number | string | undefined, name: string) => string;
   className?: string;
+  "aria-label"?: string;
 }
 
 /**
@@ -57,15 +58,17 @@ export function TrendChart({
   tooltipLabelFormatter,
   tooltipValueFormatter,
   className,
+  "aria-label": ariaLabel,
 }: TrendChartProps) {
   const config: ChartConfig = Object.fromEntries(
     series.map((s) => [s.key, { label: s.label, color: s.color }]),
   );
 
   const Chart = variant === "area" ? AreaChart : LineChart;
+  const resolvedAriaLabel = ariaLabel ?? series.map((s) => s.label).join(", ") + " trend";
 
   return (
-    <ChartContainer config={config} className={className}>
+    <ChartContainer config={config} className={className} role="img" aria-label={resolvedAriaLabel}>
       <Chart data={data} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
         <CartesianGrid vertical={false} />
         <XAxis

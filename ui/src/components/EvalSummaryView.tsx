@@ -40,6 +40,13 @@ export function EvalStatusBadge({ status }: { status: EvalStatus }) {
   return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>;
 }
 
+function passDotLabel(passRate: number | null): string {
+  if (passRate === null) return "No data";
+  if (passRate === 1) return "Pass";
+  if (passRate === 0) return "Fail";
+  return "Partial pass";
+}
+
 /** A pass/fail dot: green when every case passed, amber on a partial pass, red when none did. */
 export function PassDot({ passRate }: { passRate: number | null }) {
   const color =
@@ -50,7 +57,12 @@ export function PassDot({ passRate }: { passRate: number | null }) {
         : passRate === 0
           ? "bg-destructive"
           : "bg-warning";
-  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} aria-hidden />;
+  return (
+    <>
+      <span className={`inline-block h-2 w-2 rounded-full ${color}`} aria-hidden />
+      <span className="sr-only">{passDotLabel(passRate)}</span>
+    </>
+  );
 }
 
 function ScorerRow({ name, scorer }: { name: string; scorer: ScorerSummary }) {

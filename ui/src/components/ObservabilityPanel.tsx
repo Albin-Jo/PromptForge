@@ -306,29 +306,31 @@ function ByVersion({ data, name, window }: { data: PromptMetrics; name: string; 
         <CardDescription>Each version's traffic, errors, latency, and cost (quality lives under Eval scores).</CardDescription>
       </CardHeader>
       <CardContent>
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="text-muted-foreground border-border border-b text-left">
-              <th className="py-2 font-medium">Version</th>
-              <th className="py-2 font-medium">Trend</th>
-              <th className="py-2 text-right font-medium">Requests</th>
-              <th className="py-2 text-right font-medium">Error rate</th>
-              <th className="py-2 text-right font-medium">p95</th>
-              <th className="py-2 text-right font-medium">Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.by_version.map((v) => (
-              <VersionRow
-                key={v.prompt_version_id}
-                name={name}
-                window={window}
-                version={v}
-                liveLabels={labelsFor(v.version_number)}
-              />
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="text-muted-foreground border-border border-b text-left">
+                <th className="py-2 font-medium">Version</th>
+                <th className="py-2 font-medium">Trend</th>
+                <th className="py-2 text-right font-medium">Requests</th>
+                <th className="py-2 text-right font-medium">Error rate</th>
+                <th className="py-2 text-right font-medium">p95</th>
+                <th className="py-2 text-right font-medium">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.by_version.map((v) => (
+                <VersionRow
+                  key={v.prompt_version_id}
+                  name={name}
+                  window={window}
+                  version={v}
+                  liveLabels={labelsFor(v.version_number)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </CardContent>
     </Card>
   );

@@ -100,29 +100,31 @@ function ComparisonTable({
   ];
 
   return (
-    <table className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="text-muted-foreground border-border border-b text-left">
-          <th className="py-2 font-medium">Metric</th>
-          <th className="py-2 text-right font-medium">{labelA}</th>
-          <th className="py-2 text-right font-medium">{labelB}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr key={r.metric} className="border-border/60 border-b">
-            <td className="text-muted-foreground py-2">
-              <span className="inline-flex items-center gap-1">
-                {r.metric}
-                {r.hint && <InfoHint text={r.hint} />}
-              </span>
-            </td>
-            <td className="py-2 text-right tabular-nums">{r.a}</td>
-            <td className="py-2 text-right tabular-nums">{r.b}</td>
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="text-muted-foreground border-border border-b text-left">
+            <th className="py-2 font-medium">Metric</th>
+            <th className="py-2 text-right font-medium">{labelA}</th>
+            <th className="py-2 text-right font-medium">{labelB}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.metric} className="border-border/60 border-b">
+              <td className="text-muted-foreground py-2">
+                <span className="inline-flex items-center gap-1">
+                  {r.metric}
+                  {r.hint && <InfoHint text={r.hint} />}
+                </span>
+              </td>
+              <td className="py-2 text-right tabular-nums">{r.a}</td>
+              <td className="py-2 text-right tabular-nums">{r.b}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

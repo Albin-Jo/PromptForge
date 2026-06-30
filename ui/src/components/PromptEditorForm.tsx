@@ -197,7 +197,7 @@ export function PromptEditorForm({
 
       <CompositionEditor value={composition} onChange={setComposition} />
 
-      {errorMessage && <p className="mt-4 text-sm text-destructive">{errorMessage}</p>}
+      {errorMessage && <p role="alert" className="mt-4 text-sm text-destructive">{errorMessage}</p>}
 
       <Button
         type="submit"

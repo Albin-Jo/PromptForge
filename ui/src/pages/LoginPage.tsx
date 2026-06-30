@@ -81,6 +81,8 @@ export function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "login-error" : undefined}
               />
             </div>
 
@@ -95,10 +97,12 @@ export function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? "login-error" : undefined}
               />
             </div>
 
-            {error && <p className="text-destructive text-sm">{error}</p>}
+            {error && <p id="login-error" role="alert" className="text-destructive text-sm">{error}</p>}
           </CardContent>
 
           <CardFooter>

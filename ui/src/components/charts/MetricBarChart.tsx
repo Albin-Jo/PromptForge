@@ -21,6 +21,7 @@ interface MetricBarChartProps {
   yTickFormatter?: (value: number) => string;
   tooltipValueFormatter?: (value: number | string | undefined, name: string) => string;
   className?: string;
+  "aria-label"?: string;
 }
 
 /**
@@ -38,12 +39,14 @@ export function MetricBarChart({
   yTickFormatter,
   tooltipValueFormatter,
   className,
+  "aria-label": ariaLabel,
 }: MetricBarChartProps) {
   const config: ChartConfig = { [valueKey]: { label, color } };
   const vertical = layout === "vertical";
+  const resolvedAriaLabel = ariaLabel ?? label + " chart";
 
   return (
-    <ChartContainer config={config} className={className}>
+    <ChartContainer config={config} className={className} role="img" aria-label={resolvedAriaLabel}>
       <BarChart
         data={data}
         layout={layout}
