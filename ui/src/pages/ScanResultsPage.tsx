@@ -1,75 +1,13 @@
 import { useParams } from "react-router-dom";
 import { isScanRunning, useTriggerScan, useVersionScan } from "../lib/scans/api";
-import type { Category, Finding, Severity, VersionScanStatus } from "../lib/scans/types";
+import type { Severity, VersionScanStatus } from "../lib/scans/types";
 import { useCan } from "../lib/auth/AuthContext";
 import { toast, toastError } from "../lib/toast";
+import { FindingsByCategory } from "../components/ScanFindingsView";
 import { QueryState } from "../components/QueryState";
 import { RunActionButton } from "../components/RunActionButton";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { Badge } from "../components/ui/badge";
-import { Card, CardContent } from "../components/ui/card";
-
-const SEVERITY_RANK: Record<Severity, number> = { low: 0, medium: 1, high: 2 };
-
-const CATEGORY_LABEL: Record<Category, string> = {
-  injection: "Prompt injection",
-  pii: "PII",
-  secret: "Secrets",
-  jailbreak: "Jailbreak",
-};
-
-// Stable display order for the category groups.
-const CATEGORY_ORDER: Category[] = ["injection", "jailbreak", "secret", "pii"];
-
-function FindingCard({ finding }: { finding: Finding }) {
-  return (
-    <li className="border-b border-border py-3 last:border-b-0">
-      <div className="flex items-center gap-2">
-        <SeverityBadge severity={finding.severity} />
-        <code className="text-xs text-muted-foreground">{finding.detector}</code>
-      </div>
-      <p className="mt-1 text-sm text-foreground">{finding.message}</p>
-      {finding.evidence && (
-        <div className="mt-1">
-          <span className="text-xs text-muted-foreground">evidence (redacted): </span>
-          <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">
-            {finding.evidence}
-          </code>
-        </div>
-      )}
-    </li>
-  );
-}
-
-function FindingsByCategory({ findings }: { findings: Finding[] }) {
-  // Bucket by category, then sort each bucket worst-first.
-  const groups = CATEGORY_ORDER.map((category) => ({
-    category,
-    items: findings
-      .filter((f) => f.category === category)
-      .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity]),
-  })).filter((g) => g.items.length > 0);
-
-  return (
-    <Card className="mt-6">
-      <CardContent className="space-y-6">
-        {groups.map((group) => (
-          <section key={group.category}>
-            <h3 className="mb-1 text-sm font-medium text-foreground">
-              {CATEGORY_LABEL[group.category]}{" "}
-              <span className="font-normal text-muted-foreground">({group.items.length})</span>
-            </h3>
-            <ul>
-              {group.items.map((f, i) => (
-                <FindingCard key={`${f.detector}-${i}`} finding={f} />
-              ))}
-            </ul>
-          </section>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
 
 // The status-specific body once the scan record has loaded. The scan lifecycle lives *inside* a
 // successful response, so we branch on it here (not in QueryState).

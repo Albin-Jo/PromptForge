@@ -43,6 +43,22 @@ class ScanRepository:
         )
         return self._session.scalars(stmt).one_or_none()
 
+    def list_for_version(
+        self, prompt_version_id: uuid.UUID, *, limit: int
+    ) -> list[SecurityScan]:
+        """A version's scans, newest first, capped at ``limit`` (the scan-history list).
+
+        Findings live on the row as a JSONB blob, so the history loads with no extra join —
+        the same shape the latest-status read uses, just unbounded by ``.limit(1)``.
+        """
+        stmt = (
+            select(SecurityScan)
+            .where(SecurityScan.prompt_version_id == prompt_version_id)
+            .order_by(SecurityScan.created_at.desc())
+            .limit(limit)
+        )
+        return list(self._session.scalars(stmt).all())
+
     def latest_completed_for_version(self, prompt_version_id: uuid.UUID) -> SecurityScan | None:
         """The most recent *completed* scan for a version (the gate's source of risk_level)."""
         stmt = (

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Play, ShieldCheck } from "lucide-react";
+import { History, Play, ShieldCheck } from "lucide-react";
 import { usePrompt, useResolveLabel } from "../lib/prompts/api";
 import type { Prompt, PromptVersion } from "../lib/prompts/types";
 import { useCan } from "../lib/auth/AuthContext";
@@ -96,6 +96,7 @@ function VersionHistoryBody({ name, prompt }: { name: string; prompt: Prompt }) 
                   <TableHead>Variables</TableHead>
                   <TableHead>Blocks</TableHead>
                   <TableHead className="text-right">Scan</TableHead>
+                  <TableHead className="text-right">Runs</TableHead>
                   <TableHead className="text-right">Run</TableHead>
                   <TableHead className="text-right">Promote</TableHead>
                 </TableRow>
@@ -124,6 +125,15 @@ function VersionHistoryBody({ name, prompt }: { name: string; prompt: Prompt }) 
                           to={`/prompts/${encodeURIComponent(name)}/versions/${v.version_number}/scan`}
                         >
                           <ShieldCheck /> Scan
+                        </Link>
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/prompts/${encodeURIComponent(name)}/versions/${v.version_number}/runs`}
+                        >
+                          <History /> Runs
                         </Link>
                       </Button>
                     </TableCell>

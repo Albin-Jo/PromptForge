@@ -43,3 +43,16 @@ export interface ScanAccepted {
   security_scan_id: string;
   status: string;
 }
+
+// Mirrors ScanRunSummary — one row in a version's scan run-history list (newest first).
+// `findings` carries the full list (so the drill-in needs no second call) and is null while the
+// scan is pending/running or on failure; the list's finding count is derived from it.
+export interface ScanRunSummary {
+  id: string;
+  status: ScanStatus;
+  scanners: string[];
+  risk_level: Severity | "none" | null;
+  findings: Finding[] | null;
+  created_at: string;
+  completed_at: string | null;
+}

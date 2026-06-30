@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { usePromptMetrics } from "../lib/metrics/api";
-import { formatPct, formatQuality } from "../lib/metrics/format";
 import type { MetricsWindow, PromptMetrics } from "../lib/metrics/types";
 import { isEvalRunning, useTriggerEval, useVersionEval } from "../lib/evals/api";
-import type { EvalStatus, ScorerSummary, VersionEvalStatus } from "../lib/evals/types";
+import type { VersionEvalStatus } from "../lib/evals/types";
 import { useCan } from "../lib/auth/AuthContext";
 import { toast, toastError } from "../lib/toast";
+import { EvalSummaryView } from "./EvalSummaryView";
 import { QualityBar } from "./QualityBar";
 import { QueryState } from "./QueryState";
 import { RunActionButton } from "./RunActionButton";
-import { Badge } from "./ui/badge";
-import type { badgeVariants } from "./ui/badge";
 import {
   Card,
   CardContent,
@@ -27,104 +25,14 @@ import {
   TableRow,
 } from "./ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import type { VariantProps } from "class-variance-authority";
-
-type BadgeVariant = VariantProps<typeof badgeVariants>["variant"];
-
-// How each eval lifecycle state reads, and which shared Badge variant carries its colour.
-const STATUS_LABEL: Record<EvalStatus, string> = {
-  unevaluated: "Not evaluated yet",
-  pending: "In progress",
-  running: "In progress",
-  completed: "Evaluated",
-  failed: "Eval failed",
-};
-
-const STATUS_VARIANT: Record<EvalStatus, BadgeVariant> = {
-  unevaluated: "secondary",
-  pending: "warning",
-  running: "warning",
-  completed: "success",
-  failed: "destructive",
-};
-
-function EvalStatusBadge({ status }: { status: EvalStatus }) {
-  return <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>;
-}
-
-/** A pass/fail dot: green when every case passed, amber on a partial pass, red when none did. */
-function PassDot({ passRate }: { passRate: number | null }) {
-  const color =
-    passRate === null
-      ? "bg-muted-foreground/40"
-      : passRate === 1
-        ? "bg-success"
-        : passRate === 0
-          ? "bg-destructive"
-          : "bg-warning";
-  return <span className={`inline-block h-2 w-2 rounded-full ${color}`} aria-hidden />;
-}
-
-function ScorerRow({ name, scorer }: { name: string; scorer: ScorerSummary }) {
-  return (
-    <TableRow>
-      <TableCell className="font-medium text-foreground">
-        <span className="flex items-center gap-2">
-          <PassDot passRate={scorer.pass_rate} />
-          {name}
-        </span>
-      </TableCell>
-      <TableCell className="text-right text-muted-foreground">
-        {scorer.passed}/{scorer.count}
-      </TableCell>
-      <TableCell className="text-right text-muted-foreground">{formatPct(scorer.pass_rate)}</TableCell>
-      <TableCell className="text-right text-muted-foreground">{formatQuality(scorer.mean_value)}</TableCell>
-    </TableRow>
-  );
-}
 
 function EvalDetail({ data }: { data: VersionEvalStatus }) {
-  if (data.status !== "completed" || !data.summary) {
-    return (
-      <div className="mt-3 flex items-center gap-3">
-        <EvalStatusBadge status={data.status} />
-        {data.status === "unevaluated" && (
-          <span className="text-sm text-muted-foreground">No eval has run for this version.</span>
-        )}
-        {data.status === "failed" && (
-          <span className="text-sm text-muted-foreground">
-            The eval run errored — check the worker logs.
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  const { summary } = data;
-  const scorers = Object.entries(summary.scorers);
   return (
-    <div className="mt-3">
-      <EvalStatusBadge status={data.status} />
-      <Table className="mt-3">
-        <TableHeader>
-          <TableRow>
-            <TableHead>Scorer</TableHead>
-            <TableHead className="text-right">Passed</TableHead>
-            <TableHead className="text-right">Pass rate</TableHead>
-            <TableHead className="text-right">Mean</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {scorers.map(([name, scorer]) => (
-            <ScorerRow key={name} name={name} scorer={scorer} />
-          ))}
-        </TableBody>
-      </Table>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {summary.items} item{summary.items === 1 ? "" : "s"} · {summary.scored} scored ·{" "}
-        {summary.errors} error{summary.errors === 1 ? "" : "s"}
-      </p>
-    </div>
+    <EvalSummaryView
+      status={data.status}
+      summary={data.summary}
+      emptyMessage="No eval has run for this version."
+    />
   );
 }
 

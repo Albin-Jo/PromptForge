@@ -81,6 +81,22 @@ class EvalRepository:
         )
         return self._session.scalars(stmt).one_or_none()
 
+    def list_runs_for_version(
+        self, prompt_version_id: uuid.UUID, *, limit: int
+    ) -> list[EvalRun]:
+        """A version's eval runs, newest first, capped at ``limit`` (the run-history list).
+
+        The summary rollup lives on the row, so the history needs no per-item ``scores`` load —
+        the same "don't load the heavy children to list" choice as ``list_datasets``.
+        """
+        stmt = (
+            select(EvalRun)
+            .where(EvalRun.prompt_version_id == prompt_version_id)
+            .order_by(EvalRun.created_at.desc())
+            .limit(limit)
+        )
+        return list(self._session.scalars(stmt).all())
+
     def latest_completed_run_for_version(self, prompt_version_id: uuid.UUID) -> EvalRun | None:
         """The most recent *completed* eval run for a version (the gate's source of scores)."""
         stmt = (

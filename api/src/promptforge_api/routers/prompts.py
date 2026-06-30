@@ -28,6 +28,7 @@ from promptforge_api.repositories.scans import ScanRepository
 from promptforge_api.schemas import (
     BlockRefDTO,
     EvalRunAccepted,
+    EvalRunSummary,
     EvalStatusResponse,
     GoldenSetAttach,
     LabelRead,
@@ -40,6 +41,7 @@ from promptforge_api.schemas import (
     RenderRequest,
     RenderResponse,
     ScanAccepted,
+    ScanRunSummary,
     ScanStatusResponse,
     VersionCreate,
 )
@@ -357,6 +359,28 @@ def get_eval_status(name: str, version_number: int, service: EvalServiceDep) -> 
     )
 
 
+@router.get(
+    "/{name}/versions/{version_number}/evals",
+    response_model=list[EvalRunSummary],
+)
+def list_eval_runs(
+    name: str, version_number: int, service: EvalServiceDep
+) -> list[EvalRunSummary]:
+    """List a version's eval runs, newest first — the audit history behind the latest status."""
+    runs = service.list_version_runs(prompt_name=name, version_number=version_number)
+    return [
+        EvalRunSummary(
+            id=run.id,
+            status=run.status,
+            scorers=[spec["scorer"] for spec in run.scorer_config if "scorer" in spec],
+            created_at=run.created_at,
+            completed_at=run.completed_at,
+            summary=run.summary,
+        )
+        for run in runs
+    ]
+
+
 @router.post(
     "/{name}/versions/{version_number}/scan",
     status_code=status.HTTP_202_ACCEPTED,
@@ -367,6 +391,29 @@ def scan_version(name: str, version_number: int, service: ScanServiceDep) -> Sca
     """Trigger a security scan of one version (async). Scans also run automatically on save."""
     scan = service.scan_version(prompt_name=name, version_number=version_number)
     return ScanAccepted(security_scan_id=scan.id, status=scan.status)
+
+
+@router.get(
+    "/{name}/versions/{version_number}/scans",
+    response_model=list[ScanRunSummary],
+)
+def list_scan_runs(
+    name: str, version_number: int, service: ScanServiceDep
+) -> list[ScanRunSummary]:
+    """List a version's security scans, newest first — audit history behind the latest status."""
+    scans = service.list_version_scans(prompt_name=name, version_number=version_number)
+    return [
+        ScanRunSummary(
+            id=scan.id,
+            status=scan.status,
+            scanners=scan.scanners,
+            risk_level=scan.risk_level,
+            findings=scan.findings,
+            created_at=scan.created_at,
+            completed_at=scan.completed_at,
+        )
+        for scan in scans
+    ]
 
 
 @router.get(

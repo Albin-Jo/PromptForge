@@ -10,6 +10,8 @@ ones so existing imports keep working.
 
 from __future__ import annotations
 
+import uuid
+
 
 class PromptNotFoundError(Exception):
     """Raised when a named prompt does not exist."""
@@ -26,6 +28,14 @@ class VersionNotFoundError(Exception):
         super().__init__(f"prompt '{name}' has no version {version_number}")
         self.name = name
         self.version_number = version_number
+
+
+class TraceNotFoundError(Exception):
+    """Raised when a trace with the requested id does not exist."""
+
+    def __init__(self, trace_id: uuid.UUID) -> None:
+        super().__init__(f"trace '{trace_id}' not found")
+        self.trace_id = trace_id
 
 
 class DatasetAlreadyExistsError(Exception):
