@@ -15,9 +15,9 @@ from sqlalchemy.orm import Session
 
 from promptforge_api import enqueue
 from promptforge_api.authz import require_admin, require_editor
-from promptforge_api.cache import get_cache
+from promptforge_api.cache import get_cache, get_cache_stats
 from promptforge_api.composition.builder import BlockRef
-from promptforge_api.config import get_settings
+from promptforge_api.config import Settings, get_settings
 from promptforge_api.db.engine import get_session
 from promptforge_api.promotion import PromotionPolicy
 from promptforge_api.repositories.composition import CompositionRepository
@@ -27,6 +27,7 @@ from promptforge_api.repositories.prompts import PromptRepository
 from promptforge_api.repositories.scans import ScanRepository
 from promptforge_api.schemas import (
     BlockRefDTO,
+    CacheStatsResponse,
     EvalRunAccepted,
     EvalRunSummary,
     EvalStatusResponse,
@@ -127,12 +128,14 @@ def get_prompt_service(session: SessionDep) -> PromptService:
         gate=gate,
         scans=_scan_service(session),
         cache_ttl_seconds=settings.render_cache_ttl_seconds,
+        cache_stats=get_cache_stats(),
     )
 
 
 ServiceDep = Annotated[PromptService, Depends(get_prompt_service)]
 EvalServiceDep = Annotated[EvalService, Depends(get_eval_service)]
 ScanServiceDep = Annotated[ScanService, Depends(get_scan_service)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 @router.get("", response_model=list[PromptSummaryRead])
@@ -252,6 +255,30 @@ def render_by_label(
     """
     rendered = service.render_by_label(name=name, label=payload.label, variables=payload.variables)
     return _to_render_response(rendered)
+
+
+@router.get(
+    "/{name}/cache",
+    response_model=CacheStatsResponse,
+    dependencies=[Depends(require_admin)],
+)
+def get_render_cache_stats(
+    name: str, service: ServiceDep, settings: SettingsDep
+) -> CacheStatsResponse:
+    """Render-cache hit-rate for a prompt (admin-only).
+
+    Cumulative since the process started and per-process (ADR-free, see CacheStats); ``ttl_seconds``
+    is the cache TTL for context. 404 if the prompt doesn't exist.
+    """
+    stats = service.render_cache_stats(name)
+    return CacheStatsResponse(
+        prompt=name,
+        hits=stats.hits,
+        misses=stats.misses,
+        total=stats.total,
+        hit_rate=stats.hit_rate,
+        ttl_seconds=settings.render_cache_ttl_seconds,
+    )
 
 
 @router.put(

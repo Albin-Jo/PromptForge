@@ -14,12 +14,12 @@ import structlog
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from promptforge_api.config import get_settings
+from promptforge_api.config import Settings, get_settings
 from promptforge_api.db.engine import get_session
 from promptforge_api.repositories.metrics import MetricsRepository
 from promptforge_api.repositories.prompts import PromptRepository
 from promptforge_api.routers.metrics import MetricsWindow
-from promptforge_api.schemas import AlertDTO, AlertsResponse
+from promptforge_api.schemas import AlertDTO, AlertPolicyResponse, AlertsResponse, ThresholdDTO
 from promptforge_api.services.alerts import Alert, AlertPolicy, evaluate_alerts
 from promptforge_api.services.metrics import MetricsService
 
@@ -27,6 +27,7 @@ router = APIRouter(tags=["metrics"])
 _logger = structlog.get_logger(__name__)
 
 SessionDep = Annotated[Session, Depends(get_session)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 @router.get("/prompts/{name}/alerts", response_model=AlertsResponse)
@@ -58,6 +59,17 @@ def get_prompt_alerts(
     return AlertsResponse(name=name, window=window, alerts=[_dto(a) for a in alerts])
 
 
+@router.get("/alert-policy", response_model=AlertPolicyResponse)
+def get_alert_policy(settings: SettingsDep) -> AlertPolicyResponse:
+    """Return the active drift-alert thresholds the panel judges against (ADR 0026).
+
+    Read-only and non-secret, so there is no role gate (matches the alerts read). The values are
+    process config — a flat *global* list, not per-prompt (v0.1 has no ``alert_policies`` table).
+    No DB is touched.
+    """
+    return _policy_dto(AlertPolicy.from_settings(settings))
+
+
 def _dto(alert: Alert) -> AlertDTO:
     return AlertDTO(
         kind=alert.kind,
@@ -65,4 +77,43 @@ def _dto(alert: Alert) -> AlertDTO:
         observed=alert.observed,
         threshold=alert.threshold,
         message=alert.message,
+    )
+
+
+def _policy_dto(policy: AlertPolicy) -> AlertPolicyResponse:
+    """Shape the domain :class:`AlertPolicy` into the self-describing wire DTO (label + unit).
+
+    The label/unit mapping is presentation, so it lives here at the HTTP boundary rather than on
+    the domain object. Cost is floated to match how ``AlertDTO`` already serializes the cost signal.
+    """
+    return AlertPolicyResponse(
+        thresholds=[
+            ThresholdDTO(
+                key="min_quality", label="Minimum quality", value=policy.min_quality, unit="score"
+            ),
+            ThresholdDTO(
+                key="max_error_rate",
+                label="Max error rate",
+                value=policy.max_error_rate,
+                unit="ratio",
+            ),
+            ThresholdDTO(
+                key="max_cost_per_request_usd",
+                label="Max cost per request",
+                value=float(policy.max_cost_per_request_usd),
+                unit="usd",
+            ),
+            ThresholdDTO(
+                key="max_quality_drop",
+                label="Max quality drop",
+                value=policy.max_quality_drop,
+                unit="score",
+            ),
+            ThresholdDTO(
+                key="min_requests",
+                label="Minimum requests",
+                value=policy.min_requests,
+                unit="count",
+            ),
+        ]
     )

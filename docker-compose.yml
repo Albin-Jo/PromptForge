@@ -21,7 +21,7 @@ services:
     image: promptforge-api:dev
     command: ["alembic", "upgrade", "head"]
     environment:
-      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge}@postgres:5432/${POSTGRES_DB:-promptforge}
+      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge_local_dev}@postgres:5432/${POSTGRES_DB:-promptforge}
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,13 +33,15 @@ services:
       dockerfile: api/Dockerfile
     image: promptforge-api:dev
     ports:
-      - "8000:8000"
+      # Host 8001 (not 8000) so this stack coexists with other local Docker stacks; the
+      # container still listens on 8000 internally (uvicorn + the healthcheck below).
+      - "8001:8000"
     environment:
       PROMPTFORGE_ENVIRONMENT: local
       PROMPTFORGE_LOG_LEVEL: INFO
       # Reachable by service name on the compose network. `+psycopg` selects the psycopg
       # v3 driver the app ships (a bare postgresql:// would resolve to psycopg2, absent here).
-      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge}@postgres:5432/${POSTGRES_DB:-promptforge}
+      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge_local_dev}@postgres:5432/${POSTGRES_DB:-promptforge}
       PROMPTFORGE_REDIS_URL: redis://redis:6379/0
       # Celery transport (Sprint 6). The API is a producer only — it enqueues by name
       # and reads results by id. Broker on Redis DB 1, results on DB 2, kept separate
@@ -81,7 +83,7 @@ services:
       # Sprint 8: the worker now RUNS evals, so it reads runs/datasets/versions and writes
       # scores directly. It reuses the API's engine (ADR 0011), which reads this same var.
       # `+psycopg` for the same reason as the api — the v3 driver the app ships.
-      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge}@postgres:5432/${POSTGRES_DB:-promptforge}
+      PROMPTFORGE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-promptforge}:${POSTGRES_PASSWORD:-promptforge_local_dev}@postgres:5432/${POSTGRES_DB:-promptforge}
       # Optional provider key for eval generation/scoring; unset is fine for a keyless demo.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # deepeval tries to create a .deepeval dir in CWD at import time (telemetry.py).
@@ -126,20 +128,22 @@ services:
       redis:
         condition: service_healthy
 
-  # React dashboard — Vite static bundle served by nginx (http://localhost:3000).
-  # The VITE_API_BASE_URL build arg is baked into the JS at image build time; it must
-  # be the URL the *browser* uses to reach the API, so localhost:8000 is correct here
-  # because the API's port is published on the host. Override for non-local deployments:
+  # React dashboard — Vite static bundle served by nginx (host http://localhost:3002).
+  # Host ports are deliberately non-default (3002 here, api on 8001) so this stack can run
+  # alongside other local Docker stacks (e.g. another project on 3000/8000) with no clash.
+  # The VITE_API_BASE_URL build arg is baked into the JS at image build time; it must be
+  # the URL the *browser* uses to reach the API, so localhost:8001 matches the api
+  # service's published host port. Override for non-local deployments:
   #   docker compose build --build-arg VITE_API_BASE_URL=https://api.example.com ui
   ui:
     build:
       context: ./ui
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: http://localhost:8000
+        VITE_API_BASE_URL: http://localhost:8001
     image: promptforge-ui:dev
     ports:
-      - "3000:80"
+      - "3002:80"
     depends_on:
       api:
         condition: service_healthy
@@ -150,10 +154,13 @@ services:
     # exporting the var or putting it in a .env file (compose reads it automatically).
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-promptforge}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-promptforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-promptforge_local_dev}
       POSTGRES_DB: ${POSTGRES_DB:-promptforge}
     ports:
-      - "5432:5432"
+      # Host 5435 (not 5432) to avoid the native Windows Postgres on 5433, another local
+      # stack on 5434, and the default 5432. In-network clients still use postgres:5432;
+      # only host-side access (scripts, a host-run api) uses 5435 — see .env.
+      - "5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -165,7 +172,9 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # Host 6381 (not 6379) to coexist with other local stacks; in-network clients use
+      # redis:6379. Host-side access uses 6381 — see .env.
+      - "6381:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

@@ -28,17 +28,26 @@ tested, observable artifact — the way we already treat the rest of production.
 ```bash
 git clone https://github.com/Albin-Jo/PromptForge.git && cd PromptForge
 docker compose up -d          # postgres + redis, a one-shot migration, then api + worker + flower
-curl http://localhost:8000/healthz          # -> {"status":"ok"}
+curl http://localhost:8001/healthz          # -> {"status":"ok"}
 ```
 
 No configuration needed — compose ships working defaults, and the core flow needs **no model
-provider key**. Then run the end-to-end demo (create → deploy → render → trace → metrics → alert):
+provider key**.
+
+> **Upgrading from an earlier checkout?** Sprint 28 changed the default Postgres password and the
+> published host ports (api `8001`, ui `3002`, postgres `5435`, redis `6381`). Postgres only applies
+> `POSTGRES_PASSWORD` when it *first* initialises its data dir, so an existing `pgdata` volume keeps
+> the old password and the api will fail to authenticate. Reset the local stack with
+> `docker compose down -v` (this drops local data) before `up`, or set `POSTGRES_PASSWORD` to the
+> old value in a `.env` file.
+
+Then run the end-to-end demo (create → deploy → render → trace → metrics → alert):
 
 ```bash
 uv run python demo/demo.py
 ```
 
-Interactive API docs: **http://localhost:8000/docs** · Celery dashboard (Flower):
+Interactive API docs: **http://localhost:8001/docs** · Celery dashboard (Flower):
 **http://localhost:5555**. The demo and its narration live in [`demo/`](demo/README.md).
 
 ## What works today

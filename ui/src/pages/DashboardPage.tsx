@@ -3,6 +3,7 @@ import { History, LineChart, Play, ShieldCheck } from "lucide-react";
 import { DashboardHeader } from "../components/DashboardHeader";
 import { PromptTabs } from "../components/PromptTabs";
 import { AlertsPanel } from "../components/AlertsPanel";
+import { CacheTile } from "../components/CacheTile";
 import { ObservabilityPanel } from "../components/ObservabilityPanel";
 import { EvalPanel } from "../components/EvalPanel";
 import { ScanPanel } from "../components/ScanPanel";
@@ -10,6 +11,7 @@ import { VersionComparison } from "../components/VersionComparison";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
+import { useCan } from "../lib/auth/AuthContext";
 import { usePromptMetrics } from "../lib/metrics/api";
 import { usePrompt } from "../lib/prompts/api";
 import type { MetricsWindow } from "../lib/metrics/types";
@@ -100,6 +102,8 @@ export function DashboardPage() {
   // The prompt (not metrics) is the system of record for versions — a version with no traces
   // yet won't appear in metrics but is still the latest we can play with / scan.
   const prompt = usePrompt(name);
+  // The render-cache tile is admin-only (the endpoint is admin-gated); gate the fetch on it too.
+  const isAdmin = useCan("admin");
 
   if (!name) return null;
 
@@ -118,6 +122,7 @@ export function DashboardPage() {
       ) : (
         <>
           <AlertsPanel name={name} window={window} />
+          <CacheTile name={name} isAdmin={isAdmin} />
           <ObservabilityPanel name={name} window={window} />
           {/* scroll-mt clears the sticky top bar when the action row scrolls here. */}
           <div id={EVAL_ANCHOR} className="scroll-mt-20">

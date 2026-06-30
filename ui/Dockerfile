@@ -22,11 +22,11 @@ COPY . .
 
 # VITE_API_BASE_URL is baked into the JS bundle at build time (import.meta.env).
 # The default is the API's published host port. The browser fetches this URL
-# directly, so it must be reachable from the user's machine — localhost:8000 is
-# correct for local compose where `ports: "8000:8000"` is in docker-compose.yml.
+# directly, so it must be reachable from the user's machine — localhost:8001 is
+# correct for local compose where the api publishes `ports: "8001:8000"`.
 # Override this build arg when deploying to a real URL, e.g.:
 #   docker build --build-arg VITE_API_BASE_URL=https://api.example.com .
-ARG VITE_API_BASE_URL=http://localhost:8000
+ARG VITE_API_BASE_URL=http://localhost:8001
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 RUN npm run build

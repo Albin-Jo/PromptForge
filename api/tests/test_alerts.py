@@ -174,3 +174,26 @@ def test_alerts_endpoint_healthy_prompt_returns_empty(
 
 def test_alerts_endpoint_404_for_unknown_prompt(client: TestClient) -> None:
     assert client.get("/prompts/nope/alerts").status_code == 404
+
+
+# --------------------------------------------------------------------- alert policy read
+def test_alert_policy_returns_configured_thresholds(client: TestClient) -> None:
+    response = client.get("/alert-policy")
+    assert response.status_code == 200
+    body = response.json()
+
+    # Flat, *global* shape only — no per-prompt identity fields leak in (ADR 0026).
+    assert set(body) == {"thresholds"}
+
+    # key -> (value, unit) must match the documented config defaults; ``unit`` is what tells the
+    # UI which formatter to apply (score / ratio / usd / count).
+    by_key = {t["key"]: (t["value"], t["unit"]) for t in body["thresholds"]}
+    assert by_key == {
+        "min_quality": (0.7, "score"),
+        "max_error_rate": (0.1, "ratio"),
+        "max_cost_per_request_usd": (0.05, "usd"),
+        "max_quality_drop": (0.1, "score"),
+        "min_requests": (20.0, "count"),
+    }
+    # Every threshold carries a human label for display.
+    assert all(t["label"] for t in body["thresholds"])

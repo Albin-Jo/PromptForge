@@ -343,6 +343,71 @@ class AlertsResponse(BaseModel):
     alerts: list[AlertDTO]
 
 
+class ThresholdDTO(BaseModel):
+    """One configured alert threshold, self-describing so the UI renders it generically.
+
+    ``unit`` tells the client which formatter to apply rather than baking that into the API:
+    ``score`` (a 0-1 quality value, e.g. 0.70), ``ratio`` (a 0-1 fraction shown as a percentage,
+    e.g. 0.10 -> 10%), ``usd`` (a dollar amount), ``count`` (an integer). ``value`` is always a
+    number on the wire; the ``count`` unit signals the UI should drop the decimal.
+    """
+
+    key: str
+    label: str
+    value: float
+    unit: Literal["score", "ratio", "usd", "count"]
+
+
+class AlertPolicyResponse(BaseModel):
+    """The active drift-alert thresholds, derived from process config (ADR 0026).
+
+    Deliberately a flat, *global* list with no per-prompt identity (no name/id/scope): v0.1 has no
+    ``alert_policies`` table and ``PUT /prompts/{name}/alert-policy`` is deferred, so the shape must
+    not imply per-prompt persistence. Per-prompt overrides (phase 2) would be a separate endpoint
+    returning a superset of this list plus provenance.
+    """
+
+    thresholds: list[ThresholdDTO]
+
+
+class QueueDepthDTO(BaseModel):
+    """Pending (not-yet-delivered) message count for one Celery broker queue."""
+
+    name: str
+    depth: int
+
+
+class QueueHealthResponse(BaseModel):
+    """Celery queue/worker health for the admin ops surface (Sprint 29 T3).
+
+    ``available`` is False when the broker can't be reached — every count is then null (the endpoint
+    degrades, it never 500s). ``workers``/``active`` are null when the broker was up but worker
+    inspection failed; ``queued`` is the total backlog across ``queues``.
+    """
+
+    available: bool
+    workers: int | None
+    active: int | None
+    queued: int | None
+    queues: list[QueueDepthDTO] | None
+
+
+class CacheStatsResponse(BaseModel):
+    """Render-cache hit-rate for one prompt (Sprint 29 T4).
+
+    Cumulative since the API process started and per-process (each worker counts its own), so it's
+    an operability signal, not an accounting figure. ``hit_rate`` is null when there's been no
+    render traffic yet (``total == 0``); ``ttl_seconds`` is the cache TTL, for staleness context.
+    """
+
+    prompt: str
+    hits: int
+    misses: int
+    total: int
+    hit_rate: float | None
+    ttl_seconds: int
+
+
 class TraceIngestRequest(BaseModel):
     """Body for ``POST /traces`` — one emitted execution reported by an SDK client.
 

@@ -10,7 +10,7 @@ import { expect, request, test, type APIRequestContext, type Page } from "@playw
 // except the final eval-detail test which is skipped unless a fully-seeded prompt is provided.
 const ADMIN_EMAIL = "admin@promptforge.dev";
 const ADMIN_PASSWORD = "devpassword123";
-const API = "http://localhost:8000";
+const API = "http://localhost:8001";
 
 const DESKTOP = { width: 1440, height: 900 };
 

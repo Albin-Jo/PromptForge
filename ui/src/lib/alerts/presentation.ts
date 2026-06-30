@@ -1,4 +1,5 @@
-import type { AlertKind } from "./types";
+import { formatCost, formatPct, formatQuality } from "../metrics/format";
+import type { AlertKind, AlertThreshold } from "./types";
 
 // Presentation for each alert kind the API emits. The API owns *whether* an alert fires and its
 // human `message`; the UI owns how the kind reads (a short label + a severity for badge colour and
@@ -33,4 +34,25 @@ export function formatAlertScope(scope: string): string {
   if (scope === "overall") return "Prompt-wide";
   const match = /^version:(\d+)$/.exec(scope);
   return match ? `Version ${match[1]}` : scope;
+}
+
+/**
+ * Format a threshold's value for display, picking the formatter from its `unit` (the API tells us
+ * which): `score` → "0.70", `ratio` → "10.0%", `usd` → "$0.05", `count` → "20". An unknown future
+ * unit falls back to the raw number so the line still renders rather than crashing.
+ */
+export function formatThreshold(threshold: AlertThreshold): string {
+  switch (threshold.unit) {
+    case "score":
+      return formatQuality(threshold.value);
+    case "ratio":
+      return formatPct(threshold.value);
+    case "usd":
+      // formatCost takes the exact decimal *string* from the API; the policy value is a number.
+      return formatCost(String(threshold.value));
+    case "count":
+      return Math.round(threshold.value).toLocaleString();
+    default:
+      return String(threshold.value);
+  }
 }

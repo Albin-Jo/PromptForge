@@ -10,7 +10,7 @@ import { expect, request, test } from "@playwright/test";
 // returns: streamed output, or the streamed error.
 const ADMIN_EMAIL = "admin@promptforge.dev";
 const ADMIN_PASSWORD = "devpassword123";
-const API = "http://localhost:8000";
+const API = "http://localhost:8001";
 
 test("compose, diff two versions, and run the playground", async ({ page }) => {
   const stamp = Date.now();
@@ -41,6 +41,9 @@ test("compose, diff two versions, and run the playground", async ({ page }) => {
   await page.getByLabel("Email").fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
+  // Login lands on the Overview dashboard; navigate to the Prompts list for the flow below.
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.getByRole("link", { name: "Prompts" }).click();
   await expect(page.getByRole("heading", { name: "Prompts" })).toBeVisible();
 
   // --- create the prompt (version 1) ---
@@ -49,7 +52,7 @@ test("compose, diff two versions, and run the playground", async ({ page }) => {
   await page.getByLabel("Content").fill("Summarize {{text}}");
   await page.getByLabel("Input variables").fill("text");
   await page.getByRole("button", { name: /create prompt/i }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/prompts$/);
 
   // --- edit: compose the block in + change content -> save version 2 ---
   await page.getByRole("link", { name: promptName }).click();
@@ -58,7 +61,7 @@ test("compose, diff two versions, and run the playground", async ({ page }) => {
   await expect(page.getByLabel(`Pinned version for ${blockName}`)).toBeVisible();
   await page.getByLabel("Content").fill("Summarize concisely: {{text}}");
   await page.getByRole("button", { name: /save new version/i }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/prompts$/);
 
   // --- version history: the two versions diff with added + removed rows ---
   await page.getByRole("link", { name: promptName }).click();

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiFetch, setAuthFailureHandler } from "./api";
+import { toast } from "./toast";
 import { clearTokens, getRefreshToken, setTokens } from "./auth/tokenStore";
 
 // Minimal Response stand-in matching what api.ts touches (ok/status/statusText/text()).
@@ -10,6 +11,18 @@ function jsonResponse(status: number, body: unknown) {
     statusText: "",
     text: async () => JSON.stringify(body),
   } as Response;
+}
+
+// A 429 Response stand-in that also exposes a `Retry-After` header (the only path that reads
+// headers), so we can assert the retry hint is surfaced.
+function rateLimitedResponse(retryAfter: number) {
+  return {
+    ok: false,
+    status: 429,
+    statusText: "",
+    headers: { get: (name: string) => (name === "Retry-After" ? String(retryAfter) : null) },
+    text: async () => JSON.stringify({ detail: "rate limit exceeded" }),
+  } as unknown as Response;
 }
 
 function authHeader(init: RequestInit | undefined): string | undefined {
@@ -92,6 +105,22 @@ describe("apiFetch token refresh", () => {
     await expect(apiFetch("/widgets")).rejects.toMatchObject({ status: 401 });
     expect(getRefreshToken()).toBeNull();
     expect(onFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a 429's Retry-After and fires one rate-limit toast", async () => {
+    const errorToast = vi.spyOn(toast, "error").mockReturnValue("toast-id");
+    vi.stubGlobal("fetch", vi.fn(async () => rateLimitedResponse(30)));
+
+    await expect(apiFetch("/widgets")).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 30,
+    });
+
+    expect(errorToast).toHaveBeenCalledTimes(1);
+    expect(errorToast).toHaveBeenCalledWith(
+      expect.stringContaining("30s"),
+      expect.objectContaining({ id: "rate-limit" }),
+    );
   });
 
   it("does not attempt a refresh when there is no refresh token", async () => {

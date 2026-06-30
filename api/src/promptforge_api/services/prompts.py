@@ -23,7 +23,7 @@ import structlog
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
-from promptforge_api.cache import Cache, NullCache
+from promptforge_api.cache import Cache, CacheStats, CacheStatsSnapshot, NullCache
 from promptforge_api.composition.builder import BlockRef, PinnedComposition, pin_composition
 from promptforge_api.composition.resolver import resolve
 from promptforge_api.db.models import Label, Prompt, PromptVersion
@@ -118,11 +118,16 @@ class PromptService:
         gate: PromotionGate | None = None,
         scans: ScanService | None = None,
         cache_ttl_seconds: int = 30,
+        cache_stats: CacheStats | None = None,
     ) -> None:
         self._repository = repository
         # Default to a no-op cache so a service built without one (or in a unit test)
         # behaves exactly as before — straight to the repository.
         self._cache: Cache = cache if cache is not None else NullCache()
+        # Render-cache hit/miss recorder (Sprint 29 T4). Defaults to a private, throwaway instance
+        # so a service built without one still records harmlessly; the router injects the shared
+        # process-wide recorder so the read endpoint sees the same counts.
+        self._cache_stats: CacheStats = cache_stats if cache_stats is not None else CacheStats()
         # Composition is optional: a service built without it serves plain prompts and
         # rejects any request that carries block references (a misconfiguration).
         self._composition = composition
@@ -348,12 +353,24 @@ class PromptService:
         cached = self._cache.get(key)
         if cached is not None:
             _logger.info("render_cache", outcome="hit", prompt=name, label=label)
+            self._cache_stats.record(name, hit=True)
             return _rendered_from_json(cached)
 
         _logger.info("render_cache", outcome="miss", prompt=name, label=label)
+        # Resolve + render *before* counting the miss: only tally one once we know this was a real,
+        # served prompt. Recording earlier would count misses for unknown prompts (growing the
+        # per-prompt dict on a request-controlled name) and for renders that fail variable
+        # validation (depressing the hit-rate this signal reports). The hit path above is safe to
+        # count eagerly — a cache hit only ever holds a value that previously rendered successfully.
         rendered = self._render(self.resolve_label(name, label), variables)
+        self._cache_stats.record(name, hit=False)
         self._cache.set(key, _rendered_to_json(rendered), ttl_seconds=self._cache_ttl_seconds)
         return rendered
+
+    def render_cache_stats(self, name: str) -> CacheStatsSnapshot:
+        """Cumulative render-cache hit/miss counts for *name* (404 if the prompt doesn't exist)."""
+        self._require_prompt(name)
+        return self._cache_stats.snapshot(name)
 
     def _render(self, version: PromptVersion, variables: dict[str, str]) -> RenderedPrompt:
         """Fill one version's template, enforcing the render-variable contract.
