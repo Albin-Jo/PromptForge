@@ -26,6 +26,7 @@ from promptforge_api.middleware import (
 from promptforge_api.repositories.users import UserRepository
 from promptforge_api.routers import (
     alerts,
+    audit,
     auth,
     blocks,
     datasets,
@@ -154,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     register_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(audit.router)
     app.include_router(prompts.router)
     app.include_router(blocks.router)
     app.include_router(datasets.router)

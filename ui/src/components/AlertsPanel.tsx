@@ -1,4 +1,5 @@
-import { CheckCircle2, TriangleAlert } from "lucide-react";
+import { CheckCircle2, TriangleAlert, X } from "lucide-react";
+import { useCallback, useState } from "react";
 
 import { usePromptAlerts } from "../lib/alerts/api";
 import { alertMeta, formatAlertScope } from "../lib/alerts/presentation";
@@ -7,11 +8,65 @@ import type { MetricsWindow } from "../lib/metrics/types";
 import { InfoHint } from "./InfoHint";
 import { QueryState } from "./QueryState";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 
-// One firing alert: its severity badge, where it fired (prompt-wide / a version), and the API's
-// human message. We lean on `message` for the numbers — it already carries the right units.
-function AlertRow({ alert }: { alert: Alert }) {
+// --- dismiss persistence -------------------------------------------------
+
+type DismissEntry = { observed: number; threshold: number };
+type DismissMap = Record<string, DismissEntry>;
+
+const STORAGE_KEY = "pf-dismissed-alerts";
+
+function loadDismissMap(): DismissMap {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveDismissMap(map: DismissMap): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+}
+
+function alertKey(name: string, alert: Alert): string {
+  return `${name}:${alert.kind}:${alert.scope}`;
+}
+
+// A dismissal is live only while observed+threshold are unchanged — if the breach shifts
+// the alert reappears automatically without the user needing to clear anything.
+function isDismissed(map: DismissMap, name: string, alert: Alert): boolean {
+  const entry = map[alertKey(name, alert)];
+  return entry?.observed === alert.observed && entry?.threshold === alert.threshold;
+}
+
+function useDismissedAlerts(name: string) {
+  const [map, setMap] = useState<DismissMap>(loadDismissMap);
+
+  const dismiss = useCallback(
+    (alert: Alert) => {
+      const next = {
+        ...map,
+        [alertKey(name, alert)]: { observed: alert.observed, threshold: alert.threshold },
+      };
+      saveDismissMap(next);
+      setMap(next);
+    },
+    [map, name],
+  );
+
+  const check = useCallback(
+    (alert: Alert) => isDismissed(map, name, alert),
+    [map, name],
+  );
+
+  return { check, dismiss };
+}
+
+// --- components ---------------------------------------------------------
+
+function AlertRow({ alert, onDismiss }: { alert: Alert; onDismiss: (a: Alert) => void }) {
   const meta = alertMeta(alert.kind);
   return (
     <li className="flex items-start justify-between gap-4 py-3">
@@ -22,11 +77,19 @@ function AlertRow({ alert }: { alert: Alert }) {
         </div>
         <p className="text-foreground mt-1 text-sm">{alert.message}</p>
       </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-muted-foreground hover:text-foreground shrink-0"
+        onClick={() => onDismiss(alert)}
+        aria-label="Acknowledge alert"
+      >
+        <X className="size-4" />
+      </Button>
     </li>
   );
 }
 
-// Healthy: no breach in the selected window. The good case, shown plainly (mirrors Needs attention).
 function AlertsEmpty() {
   return (
     <Card className="mt-4">
@@ -40,11 +103,36 @@ function AlertsEmpty() {
   );
 }
 
-function AlertsList({ alerts }: { alerts: Alert[] }) {
-  // Most-urgent first; stable tiebreak on scope so the order doesn't jitter between fetches.
-  const sorted = [...alerts].sort(
+function AlertsList({
+  alerts,
+  name,
+}: {
+  alerts: Alert[];
+  name: string;
+}) {
+  const { check, dismiss } = useDismissedAlerts(name);
+
+  const visible = alerts.filter((a) => !check(a));
+  const hiddenCount = alerts.length - visible.length;
+
+  const sorted = [...visible].sort(
     (a, b) => alertMeta(b.kind).severity - alertMeta(a.kind).severity || a.scope.localeCompare(b.scope),
   );
+
+  if (sorted.length === 0 && hiddenCount > 0) {
+    return (
+      <Card className="mt-4">
+        <CardContent className="py-6">
+          <p className="text-muted-foreground flex items-center gap-2 text-sm">
+            <CheckCircle2 className="size-4 text-success" />
+            {hiddenCount} acknowledged alert{hiddenCount === 1 ? "" : "s"} — will reappear if the
+            breach changes.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="mt-4 border-destructive/40">
       <CardHeader>
@@ -57,9 +145,15 @@ function AlertsList({ alerts }: { alerts: Alert[] }) {
       <CardContent>
         <ul className="divide-border divide-y">
           {sorted.map((a) => (
-            <AlertRow key={`${a.kind}:${a.scope}`} alert={a} />
+            <AlertRow key={`${a.kind}:${a.scope}`} alert={a} onDismiss={dismiss} />
           ))}
         </ul>
+        {hiddenCount > 0 && (
+          <p className="text-muted-foreground mt-3 text-xs">
+            {hiddenCount} acknowledged alert{hiddenCount === 1 ? "" : "s"} hidden — reappears if
+            the breach changes.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -85,7 +179,7 @@ export function AlertsPanel({ name, window }: { name: string; window: MetricsWin
         isEmpty={(d) => d.alerts.length === 0}
         empty={<AlertsEmpty />}
       >
-        {(data) => <AlertsList alerts={data.alerts} />}
+        {(data) => <AlertsList alerts={data.alerts} name={name} />}
       </QueryState>
     </section>
   );

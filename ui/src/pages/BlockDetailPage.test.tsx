@@ -58,7 +58,7 @@ describe("BlockDetailPage", () => {
     expect(beta.compareDocumentPosition(alpha) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("shows the impact summary and the new-version action", async () => {
+  it("shows the impact count summary and the new-version action", async () => {
     renderPage();
     expect(
       await screen.findByText(/Used by 1 prompt version and 0 block versions\./),
@@ -66,5 +66,23 @@ describe("BlockDetailPage", () => {
     await waitFor(() =>
       expect(screen.getByRole("link", { name: "New version" })).toBeInTheDocument(),
     );
+  });
+
+  it("renders prompt dependencies as a visual list with links", async () => {
+    renderPage();
+    // Wait for the impact data to load.
+    const list = await screen.findByRole("list", { name: "Prompt versions" });
+    expect(list).toBeInTheDocument();
+    // The dep row links to the prompt's versions page.
+    const link = screen.getByRole("link", { name: "summarize" });
+    expect(link).toHaveAttribute("href", "/prompts/summarize/versions");
+    // Version badge is visible.
+    expect(screen.getByText("v3")).toBeInTheDocument();
+  });
+
+  it("does not render block versions list when there are none", async () => {
+    renderPage();
+    await screen.findByText(/Used by 1 prompt version/);
+    expect(screen.queryByRole("list", { name: "Block versions" })).not.toBeInTheDocument();
   });
 });

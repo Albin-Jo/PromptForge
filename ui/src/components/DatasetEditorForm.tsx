@@ -1,11 +1,142 @@
 import { useRef, useState } from "react";
-import type { FormEvent } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import type { ChangeEvent, FormEvent } from "react";
+import { Plus, Trash2, Upload, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Card } from "./ui/card";
+import { fromCsv } from "../lib/csv";
+import type { CsvParseResult } from "../lib/csv";
 import type { DatasetItem } from "../lib/datasets/types";
+
+// --- CSV import sub-component -------------------------------------------
+
+const CSV_PREVIEW_ROWS = 5;
+
+interface CsvImportSectionProps {
+  onPopulate: (rows: CsvParseResult["rows"]) => void;
+}
+
+function CsvImportSection({ onPopulate }: CsvImportSectionProps) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [parsed, setParsed] = useState<CsvParseResult | null>(null);
+
+  function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setParsed(fromCsv(text));
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be re-selected after a cancel.
+    e.target.value = "";
+  }
+
+  function handleConfirm() {
+    if (!parsed || parsed.rows.length === 0) return;
+    onPopulate(parsed.rows);
+    setParsed(null);
+  }
+
+  function handleCancel() {
+    setParsed(null);
+  }
+
+  if (!parsed) {
+    return (
+      <>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="sr-only"
+          aria-label="Select CSV file"
+          onChange={handleFile}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload className="size-4" aria-hidden />
+          Import CSV
+        </Button>
+      </>
+    );
+  }
+
+  const preview = parsed.rows.slice(0, CSV_PREVIEW_ROWS);
+  const overflow = parsed.rows.length - CSV_PREVIEW_ROWS;
+
+  return (
+    <Card className="mt-3 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">CSV preview</p>
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Cancel import"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+
+      {parsed.errors.length > 0 && (
+        <ul className="mt-2 space-y-1" aria-label="Import errors">
+          {parsed.errors.map((err, i) => (
+            <li key={i} className="text-xs text-destructive">
+              {err.message}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {preview.length > 0 ? (
+        <>
+          <div className="mt-3 overflow-x-auto rounded-md border">
+            <table className="w-full text-xs" aria-label="CSV preview table">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">input</th>
+                  <th className="px-3 py-2 text-left font-medium">reference</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {preview.map((row, i) => (
+                  <tr key={i}>
+                    <td className="max-w-xs truncate px-3 py-1.5 text-foreground">{row.input}</td>
+                    <td className="max-w-xs truncate px-3 py-1.5 text-muted-foreground">
+                      {row.reference ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {overflow > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">and {overflow} more row{overflow === 1 ? "" : "s"}…</p>
+          )}
+          <div className="mt-3 flex gap-2">
+            <Button type="button" size="sm" onClick={handleConfirm}>
+              Populate {parsed.rows.length} case{parsed.rows.length === 1 ? "" : "s"}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={handleCancel}>
+              Cancel
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="mt-2 text-xs text-muted-foreground">No valid rows found in this file.</p>
+      )}
+    </Card>
+  );
+}
+
+// -------------------------------------------------------------------------
 
 export interface DatasetFormValues {
   name: string;
@@ -66,6 +197,10 @@ export function DatasetEditorForm({
     setRows((current) => [...current, makeRow()]);
   }
 
+  function populateFromCsv(csvRows: CsvParseResult["rows"]) {
+    setRows(csvRows.map((r) => makeRow({ input: r.input, reference: r.reference, metadata: null })));
+  }
+
   function removeRow(index: number) {
     setRows((current) => current.filter((_, i) => i !== index));
   }
@@ -116,9 +251,12 @@ export function DatasetEditorForm({
       <div className="mt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-foreground">Cases</h2>
-          <span className="text-xs text-muted-foreground">
-            {usableCases} case{usableCases === 1 ? "" : "s"}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">
+              {usableCases} case{usableCases === 1 ? "" : "s"}
+            </span>
+            <CsvImportSection onPopulate={populateFromCsv} />
+          </div>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           Each case is an input and, optionally, the reference answer it should match. At least one
