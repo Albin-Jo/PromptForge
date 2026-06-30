@@ -41,9 +41,9 @@ class Settings(BaseSettings):
     # DB index 1 — distinct from the API cache (0) and the result backend (2). The
     # compose stack injects these by service name; the localhost defaults let a worker
     # run outside the container reach the same Redis.
-    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_broker_url: str = "redis://localhost:6381/1"
     # Where task return values + states are stored so a caller can poll the job id.
-    celery_result_backend: str = "redis://localhost:6379/2"
+    celery_result_backend: str = "redis://localhost:6381/2"
 
     # Note on the database: the eval task talks to Postgres, but the worker reuses the API's
     # engine (promptforge_api.db.engine, per ADR 0011) rather than holding its own DSN here.

@@ -7,7 +7,7 @@ import { expect, request, test, type APIRequestContext, type Page } from "@playw
 // without SMOKE_PROMPT or the async worker pipeline.
 const ADMIN_EMAIL = "admin@promptforge.dev";
 const ADMIN_PASSWORD = "devpassword123";
-const API = "http://localhost:8000";
+const API = "http://localhost:8001";
 
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 375, height: 812 }; // iPhone-ish portrait

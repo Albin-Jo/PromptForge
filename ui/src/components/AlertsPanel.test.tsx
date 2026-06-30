@@ -1,11 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AlertsPanel } from "./AlertsPanel";
-import { usePromptAlerts } from "../lib/alerts/api";
-import type { Alert, PromptAlerts } from "../lib/alerts/types";
+import { useAlertPolicy, usePromptAlerts } from "../lib/alerts/api";
+import type { Alert, AlertPolicy, PromptAlerts } from "../lib/alerts/types";
 
-vi.mock("../lib/alerts/api", () => ({ usePromptAlerts: vi.fn() }));
+vi.mock("../lib/alerts/api", () => ({ usePromptAlerts: vi.fn(), useAlertPolicy: vi.fn() }));
 const mockedUseAlerts = vi.mocked(usePromptAlerts);
+const mockedUsePolicy = vi.mocked(useAlertPolicy);
 
 function setAlerts(state: Partial<ReturnType<typeof usePromptAlerts>>) {
   mockedUseAlerts.mockReturnValue({
@@ -17,13 +18,34 @@ function setAlerts(state: Partial<ReturnType<typeof usePromptAlerts>>) {
   } as unknown as ReturnType<typeof usePromptAlerts>);
 }
 
+function setPolicy(state: Partial<ReturnType<typeof useAlertPolicy>>) {
+  mockedUsePolicy.mockReturnValue({
+    isPending: false,
+    isError: false,
+    error: null,
+    data: undefined,
+    ...state,
+  } as unknown as ReturnType<typeof useAlertPolicy>);
+}
+
 function response(alerts: Alert[]): PromptAlerts {
   return { name: "p", window: "7d", alerts };
 }
 
+const POLICY: AlertPolicy = {
+  thresholds: [
+    { key: "min_quality", label: "Minimum quality", value: 0.7, unit: "score" },
+    { key: "max_error_rate", label: "Max error rate", value: 0.1, unit: "ratio" },
+    { key: "max_cost_per_request_usd", label: "Max cost per request", value: 0.05, unit: "usd" },
+    { key: "min_requests", label: "Minimum requests", value: 20, unit: "count" },
+  ],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  // Default: policy not yet loaded, so the thresholds line is absent unless a test opts in.
+  setPolicy({ data: undefined });
 });
 
 describe("AlertsPanel", () => {
@@ -78,6 +100,30 @@ describe("AlertsPanel", () => {
 
     const badges = screen.getAllByText(/Error rate|Cost/);
     expect(badges[0]).toHaveTextContent("Error rate");
+  });
+
+  describe("thresholds line", () => {
+    it("renders each threshold from the fetched policy, formatted by unit", () => {
+      setAlerts({ data: response([]) });
+      setPolicy({ data: POLICY });
+
+      render(<AlertsPanel name="p" window="7d" />);
+
+      // unit-driven formatting: score → 0.70, ratio → 10.0%, usd → $0.05, count → 20.
+      expect(screen.getByText(/Minimum quality 0\.70/)).toBeInTheDocument();
+      expect(screen.getByText(/Max error rate 10\.0%/)).toBeInTheDocument();
+      expect(screen.getByText(/Max cost per request \$0\.05/)).toBeInTheDocument();
+      expect(screen.getByText(/Minimum requests 20/)).toBeInTheDocument();
+    });
+
+    it("omits the thresholds line until the policy has loaded", () => {
+      setAlerts({ data: response([]) });
+      setPolicy({ data: undefined });
+
+      render(<AlertsPanel name="p" window="7d" />);
+
+      expect(screen.queryByText(/Thresholds:/)).not.toBeInTheDocument();
+    });
   });
 
   describe("dismiss / acknowledge", () => {

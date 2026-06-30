@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ApiError } from "../lib/api";
+import { useModels } from "../lib/gateway/api";
 import { renderVersion, usePrompt } from "../lib/prompts/api";
 import { streamCompletion, type CompletionConfig } from "../lib/streaming";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import { Skeleton } from "../components/ui/skeleton";
 import { Textarea } from "../components/ui/textarea";
 import { toast } from "../lib/toast";
@@ -41,6 +49,16 @@ export function PlaygroundPage() {
   useEffect(() => {
     if (savedModel) setModel(savedModel);
   }, [savedModel]);
+
+  // The configured model list backs a picker; an empty list (unconfigured gateway) falls back
+  // to a free-text field so local/dev runs still work. The version's saved model is always an
+  // option even if it isn't in the configured list, so the prefilled value stays selectable.
+  const { data: modelsData } = useModels();
+  const models = modelsData?.models ?? [];
+  const modelOptions = useMemo(
+    () => (savedModel && !models.includes(savedModel) ? [savedModel, ...models] : models),
+    [models, savedModel],
+  );
 
   const [output, setOutput] = useState("");
   const [status, setStatus] = useState<RunStatus>("idle");
@@ -126,11 +144,27 @@ export function PlaygroundPage() {
         <div>
           <h2 className="text-sm font-medium text-foreground">Inputs</h2>
 
-          <label className="mt-3 block text-sm text-muted-foreground">
-            <span>
-              Model <span className="text-destructive" aria-hidden="true">*</span>
-            </span>
+          <label htmlFor="model-field" className="mt-3 block text-sm text-muted-foreground">
+            Model <span className="text-destructive" aria-hidden="true">*</span>
+          </label>
+          {models.length > 0 ? (
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger id="model-field" aria-required="true" className="mt-1 w-full">
+                <SelectValue placeholder="Select a model" />
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            // Gateway has no models configured (GET /models was empty): fall back to free text so
+            // local/dev runs can still name any model.
             <Input
+              id="model-field"
               type="text"
               required
               aria-required="true"
@@ -139,9 +173,11 @@ export function PlaygroundPage() {
               placeholder="openai/gpt-4o-mini"
               className="mt-1"
             />
-          </label>
+          )}
           <p className="mt-1 text-xs text-muted-foreground">
-            Required — e.g. {"openai/gpt-4o-mini"}. Run stays disabled until a model is set.
+            {models.length > 0
+              ? "Pick the model to run this prompt against. Run stays disabled until one is chosen."
+              : "Required — e.g. openai/gpt-4o-mini. Run stays disabled until a model is set."}
           </p>
 
           {version.input_variables.length === 0 ? (

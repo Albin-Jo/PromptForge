@@ -33,6 +33,7 @@ from promptforge_api.routers import (
     gateway,
     health,
     metrics,
+    ops,
     overview,
     prompts,
     traces,
@@ -67,6 +68,7 @@ _OPENAPI_TAGS = [
     {"name": "metrics", "description": "Per-prompt latency/cost/error/quality + drift alerts."},
     {"name": "overview", "description": "Fleet-wide totals, trend, and a needs-attention rollup."},
     {"name": "auth", "description": "Human login: JWT access/refresh tokens, current user, users."},
+    {"name": "ops", "description": "Celery queue depth + worker liveness (admin)."},
     {"name": "health", "description": "Liveness."},
 ]
 
@@ -164,6 +166,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(metrics.router)
     app.include_router(overview.router)
     app.include_router(alerts.router)
+    app.include_router(ops.router)
     app.include_router(auth.router)
     return app
 

@@ -19,6 +19,7 @@ import { BlockListPage } from "./pages/BlockListPage";
 import { BlockDetailPage } from "./pages/BlockDetailPage";
 import { BlockEditorPage } from "./pages/BlockEditorPage";
 import { ActivityPage } from "./pages/ActivityPage";
+import { OperationsPage } from "./pages/OperationsPage";
 
 // Route table. /login is public; everything under the layout sits behind RequireAuth.
 export function App() {
@@ -60,6 +61,7 @@ export function App() {
           <Route element={<RequireAdmin />}>
             <Route path="users" element={<UsersPage />} />
             <Route path="activity" element={<ActivityPage />} />
+            <Route path="operations" element={<OperationsPage />} />
           </Route>
         </Route>
       </Route>

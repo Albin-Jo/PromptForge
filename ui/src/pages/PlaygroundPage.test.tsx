@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { PlaygroundPage } from "./PlaygroundPage";
 import { renderVersion, usePrompt } from "../lib/prompts/api";
+import { useModels } from "../lib/gateway/api";
 import { streamCompletion, type StreamHandlers } from "../lib/streaming";
 
 // Mock the data + streaming layers so the test drives the SSE handlers directly and
@@ -12,11 +13,13 @@ vi.mock("../lib/prompts/api", () => ({
   usePrompt: vi.fn(),
   renderVersion: vi.fn(),
 }));
+vi.mock("../lib/gateway/api", () => ({ useModels: vi.fn() }));
 vi.mock("../lib/streaming", () => ({ streamCompletion: vi.fn() }));
 
 const mockedUsePrompt = vi.mocked(usePrompt);
 const mockedRender = vi.mocked(renderVersion);
 const mockedStream = vi.mocked(streamCompletion);
+const mockedUseModels = vi.mocked(useModels);
 
 const version = {
   id: "v3",
@@ -24,11 +27,28 @@ const version = {
   parent_version_id: "v2",
   content: "Summarize {{text}}",
   input_variables: ["text"],
-  model_settings: { model: "openai/gpt-4o-mini" },
+  model_settings: { model: "openai/gpt-4o-mini" } as Record<string, unknown>,
   output_schema: null,
   created_at: "2026-01-03T00:00:00Z",
   blocks: [],
 };
+// Same version with no saved model, so nothing prefills the field (used to test Run gating).
+const versionNoModel = { ...version, model_settings: {} };
+
+function setPrompt(v: typeof version) {
+  mockedUsePrompt.mockReturnValue({
+    data: { id: "p", name: "p", description: null, created_at: "", updated_at: "", versions: [v] },
+    isPending: false,
+    isError: false,
+    // The component only reads data/isPending/isError; cast covers the rest of the query result.
+  } as unknown as ReturnType<typeof usePrompt>);
+}
+
+function setModels(models: string[]) {
+  mockedUseModels.mockReturnValue({
+    data: { models },
+  } as unknown as ReturnType<typeof useModels>);
+}
 
 function renderPage() {
   return render(
@@ -45,12 +65,9 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedUsePrompt.mockReturnValue({
-    data: { id: "p", name: "p", description: null, created_at: "", updated_at: "", versions: [version] },
-    isPending: false,
-    isError: false,
-    // The component only reads data/isPending/isError; cast covers the rest of the query result.
-  } as unknown as ReturnType<typeof usePrompt>);
+  setPrompt(version);
+  // Default: the gateway has models configured, so the field is a picker.
+  setModels(["openai/gpt-4o-mini", "anthropic/claude-sonnet-4-6"]);
   mockedRender.mockResolvedValue({
     prompt: "Summarize hello",
     model_settings: { model: "openai/gpt-4o-mini" },
@@ -78,7 +95,7 @@ describe("PlaygroundPage", () => {
       expect(screen.getByLabelText(/completion output/i)).toHaveTextContent("Hello world"),
     );
     expect(screen.getByText(/done/i)).toBeInTheDocument();
-    // The rendered prompt was sent as the user message.
+    // The rendered prompt was sent as the user message, with the version's saved model.
     expect(mockedStream).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: [{ role: "user", content: "Summarize hello" }],
@@ -89,23 +106,37 @@ describe("PlaygroundPage", () => {
     );
   });
 
-  it("marks the model field as required", () => {
+  it("lists the fetched models in the picker and gates Run until one is chosen", async () => {
+    // No saved model -> nothing prefilled -> Run starts disabled even with a picker.
+    setPrompt(versionNoModel);
+    const user = userEvent.setup();
     renderPage();
+
+    const runButton = screen.getByRole("button", { name: /^run$/i });
+    expect(runButton).toBeDisabled();
+
+    // Open the picker and confirm both fetched models are offered.
+    await user.click(screen.getByRole("combobox", { name: /model/i }));
+    expect(await screen.findByRole("option", { name: "openai/gpt-4o-mini" })).toBeInTheDocument();
+    const choice = screen.getByRole("option", { name: "anthropic/claude-sonnet-4-6" });
+
+    await user.click(choice);
+
+    expect(runButton).toBeEnabled();
+  });
+
+  it("falls back to a required free-text field when no models are configured", async () => {
+    // Empty list (unconfigured gateway) + no saved model -> free-text input, Run gated on it.
+    setPrompt(versionNoModel);
+    setModels([]);
+    const user = userEvent.setup();
+    renderPage();
+
     const modelInput = screen.getByLabelText(/model/i);
     expect(modelInput).toBeRequired();
     expect(screen.getByText(/required —/i)).toBeInTheDocument();
-  });
 
-  it("disables Run when the model is blank and re-enables it once set", async () => {
-    const user = userEvent.setup();
-    renderPage();
     const runButton = screen.getByRole("button", { name: /^run$/i });
-    const modelInput = screen.getByLabelText(/model/i);
-
-    // Seeded from the version's model_settings -> Run is enabled.
-    expect(runButton).toBeEnabled();
-
-    await user.clear(modelInput);
     expect(runButton).toBeDisabled();
 
     await user.type(modelInput, "openai/gpt-4o-mini");

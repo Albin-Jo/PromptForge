@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
+from promptforge_api.config import Settings, get_settings
 from promptforge_api.gateway import GatewayError, LLMGateway, Message, ModelConfig
 
 router = APIRouter(tags=["gateway"])
@@ -34,12 +35,30 @@ class CompletionRequest(BaseModel):
     config: ModelConfig
 
 
+class ModelsResponse(BaseModel):
+    """The configured model identifiers the playground's model picker offers."""
+
+    models: list[str]
+
+
 def get_gateway() -> LLMGateway:
     """Provide a gateway wired to the real provider backend (overridden in tests)."""
     return LLMGateway()
 
 
 GatewayDep = Annotated[LLMGateway, Depends(get_gateway)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+@router.get("/models")
+async def list_models(settings: SettingsDep) -> ModelsResponse:
+    """List the model identifiers configured for the playground's model picker.
+
+    Read-only and non-secret, so there is no role gate (consistent with the other reads).
+    Empty when ``gateway_models`` is unconfigured — the UI then falls back to a free-text
+    model field so a bare local run still works.
+    """
+    return ModelsResponse(models=settings.gateway_models)
 
 
 def _sse_event(event: str, data: dict[str, Any]) -> str:

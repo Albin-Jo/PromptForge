@@ -8,8 +8,9 @@
 //   - on unrecoverable auth failure, clear tokens and notify the app (-> redirect)
 
 import { clearTokens, getAccessToken, getRefreshToken, setAccessToken } from "./auth/tokenStore";
+import { rateLimitMessage, toast } from "./toast";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
 
 /** The API origin, exported for non-JSON callers (e.g. the streaming playground). */
 export const API_BASE_URL = BASE_URL;
@@ -18,12 +19,15 @@ export const API_BASE_URL = BASE_URL;
 export class ApiError extends Error {
   readonly status: number;
   readonly body: unknown;
+  /** Seconds to wait before retrying, parsed from a 429's `Retry-After` header (else undefined). */
+  readonly retryAfterSeconds?: number;
 
-  constructor(status: number, message: string, body: unknown) {
+  constructor(status: number, message: string, body: unknown, retryAfterSeconds?: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.body = body;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -100,6 +104,17 @@ async function rawRequest<T>(path: string, options: RequestOptions): Promise<T> 
       parsed && typeof parsed === "object" && "detail" in parsed
         ? String((parsed as { detail: unknown }).detail)
         : response.statusText;
+
+    if (response.status === 429) {
+      // The rate-limit middleware sends a Retry-After hint (seconds); surface it as a single,
+      // friendly toast on every page. A fixed toast id collapses a burst of concurrent 429s
+      // into one toast rather than stacking N of them.
+      const header = Number(response.headers.get("Retry-After"));
+      const retryAfterSeconds = Number.isFinite(header) && header > 0 ? header : undefined;
+      toast.error(rateLimitMessage(retryAfterSeconds), { id: "rate-limit" });
+      throw new ApiError(response.status, detail, parsed, retryAfterSeconds);
+    }
+
     throw new ApiError(response.status, detail, parsed);
   }
 

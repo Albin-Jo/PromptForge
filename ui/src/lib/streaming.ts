@@ -7,6 +7,7 @@
 
 import { API_BASE_URL } from "./api";
 import { createSseParser } from "./sse";
+import { rateLimitMessage } from "./toast";
 
 export interface CompletionMessage {
   role: "system" | "user" | "assistant";
@@ -45,7 +46,9 @@ export interface CompletionRequestBody {
 export function messageForStatus(status: number): string {
   switch (status) {
     case 429:
-      return "Rate limited — wait a moment and retry.";
+      // The stream's response doesn't carry a parsed Retry-After here, so use the no-hint
+      // wording — same helper the global REST path uses, so the phrasing stays in one place.
+      return rateLimitMessage();
     case 401:
     case 403:
       return "Authentication problem — check the gateway's provider API key.";

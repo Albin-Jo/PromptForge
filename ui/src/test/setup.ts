@@ -14,6 +14,13 @@ if (!("ResizeObserver" in globalThis)) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = vi.fn();
 }
+// Radix Select/overlays call the Pointer Capture API on open; jsdom doesn't implement it, so
+// stub the three methods (guarded) to let those overlays actually open under userEvent.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+}
 
 // React Testing Library doesn't auto-clean between tests under Vitest's globals.
 afterEach(() => {

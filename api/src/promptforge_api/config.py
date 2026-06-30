@@ -32,16 +32,18 @@ class Settings(BaseSettings):
     version: str = __version__
 
     # Synchronous psycopg DSN (see ADR 0003). The compose stack injects this as
-    # PROMPTFORGE_DATABASE_URL; the local default matches docker-compose.yml so a
-    # developer running the api outside the container reaches the same Postgres.
-    database_url: str = "postgresql+psycopg://promptforge:promptforge@localhost:5432/promptforge"
+    # PROMPTFORGE_DATABASE_URL; this default is the bare host-run fallback and matches the
+    # *non-default* host port published in docker-compose.yml (5435, chosen to avoid a
+    # native Postgres on 5433 and another local stack on 5434). A real host run should set
+    # PROMPTFORGE_DATABASE_URL in .env — see .env.example.
+    database_url: str = "postgresql+psycopg://promptforge:promptforge_local_dev@localhost:5435/promptforge"
 
     # Celery transport for off-request-path work (Sprint 6). The API is a *producer*:
     # it enqueues tasks by name and reads results by job id, but never runs them. These
     # point at the same Redis as the worker (broker DB 1, result backend DB 2 — kept
     # separate from the cache's DB 0). The compose stack injects the in-network URLs.
-    celery_broker_url: str = "redis://localhost:6379/1"
-    celery_result_backend: str = "redis://localhost:6379/2"
+    celery_broker_url: str = "redis://localhost:6381/1"
+    celery_result_backend: str = "redis://localhost:6381/2"
 
     # Redis is an optional read-through accelerator for hot prompt fetches, never a hard
     # dependency: when unset the API serves straight from Postgres. The compose stack
@@ -159,6 +161,20 @@ class Settings(BaseSettings):
         """Parse ``PROMPTFORGE_CORS_ALLOW_ORIGINS="https://a,https://b"`` into a list."""
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    # --- LLM gateway models (Sprint 28). The model identifiers the playground's model picker
+    # offers via ``GET /models``. Non-secret, so that read has no role gate. Comma-separated and
+    # parsed exactly like ``api_keys``/``cors_allow_origins``. Empty = unconfigured: the endpoint
+    # returns ``[]`` and the UI falls back to a free-text model field so local/dev runs still work.
+    gateway_models: Annotated[list[str], NoDecode] = []
+
+    @field_validator("gateway_models", mode="before")
+    @classmethod
+    def _split_models(cls, value: object) -> object:
+        """Parse ``PROMPTFORGE_GATEWAY_MODELS="openai/gpt-4o-mini,anthropic/..."`` into a list."""
+        if isinstance(value, str):
+            return [model.strip() for model in value.split(",") if model.strip()]
         return value
 
     # --- Rate limiting (Sprint 13 / Phase 11). A fixed-window counter per *principal* (the API

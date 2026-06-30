@@ -1,9 +1,9 @@
 import { CheckCircle2, TriangleAlert, X } from "lucide-react";
 import { useCallback, useState } from "react";
 
-import { usePromptAlerts } from "../lib/alerts/api";
-import { alertMeta, formatAlertScope } from "../lib/alerts/presentation";
-import type { Alert } from "../lib/alerts/types";
+import { useAlertPolicy, usePromptAlerts } from "../lib/alerts/api";
+import { alertMeta, formatAlertScope, formatThreshold } from "../lib/alerts/presentation";
+import type { Alert, AlertThreshold } from "../lib/alerts/types";
 import type { MetricsWindow } from "../lib/metrics/types";
 import { InfoHint } from "./InfoHint";
 import { QueryState } from "./QueryState";
@@ -159,10 +159,23 @@ function AlertsList({
   );
 }
 
+// The active numeric thresholds the alerts above are judged against (Sprint 29). Always visible — so
+// a user sees *why* an alert did or didn't fire, including in the healthy state. Supplementary, so a
+// pending or failed policy fetch simply renders nothing rather than disturbing the panel.
+function ThresholdsLine({ thresholds }: { thresholds: AlertThreshold[] }) {
+  return (
+    <p className="text-muted-foreground mt-2 text-xs">
+      <span className="text-foreground/80 font-medium">Thresholds:</span>{" "}
+      {thresholds.map((t) => `${t.label} ${formatThreshold(t)}`).join(" · ")}
+    </p>
+  );
+}
+
 // The per-prompt drift-alerts surface (Sprint 16g). Reached from the Overview "Needs attention"
 // tile via the prompt dashboard. Shares the dashboard's window so the alerts match what's on screen.
 export function AlertsPanel({ name, window }: { name: string; window: MetricsWindow }) {
   const query = usePromptAlerts(name, window);
+  const policy = useAlertPolicy();
 
   return (
     <section id="alerts">
@@ -173,6 +186,9 @@ export function AlertsPanel({ name, window }: { name: string; window: MetricsWin
       <p className="text-muted-foreground mt-1 text-sm">
         Drift and regression breaches over the selected window.
       </p>
+      {policy.data && policy.data.thresholds.length > 0 && (
+        <ThresholdsLine thresholds={policy.data.thresholds} />
+      )}
       <QueryState
         query={query}
         label="alerts"
