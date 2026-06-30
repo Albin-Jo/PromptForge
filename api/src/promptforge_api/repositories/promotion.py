@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from promptforge_api.db.models import Prompt
 from promptforge_api.db.promotion_models import PromotionAudit
 
 
@@ -37,3 +38,18 @@ class PromotionAuditRepository:
             .order_by(PromotionAudit.created_at.desc())
         )
         return list(self._session.scalars(stmt))
+
+    def list_all(self, limit: int, offset: int) -> list[tuple[PromotionAudit, str]]:
+        """Return all audit entries with the prompt name, newest first."""
+        stmt = (
+            select(PromotionAudit, Prompt.name)
+            .join(Prompt, PromotionAudit.prompt_id == Prompt.id)
+            .order_by(PromotionAudit.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(self._session.execute(stmt))
+
+    def count_all(self) -> int:
+        """Total number of audit entries (for pagination)."""
+        return self._session.scalar(select(func.count()).select_from(PromotionAudit)) or 0

@@ -616,3 +616,20 @@ class UserRead(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+
+
+class AuditEventResponse(BaseModel):
+    """One audited action as returned by the Activity page."""
+
+    id: str
+    actor: str
+    action: str
+    target: str
+    timestamp: str
+
+
+class AuditLogPage(BaseModel):
+    """Paginated audit log — newest events first."""
+
+    events: list[AuditEventResponse]
+    total: int

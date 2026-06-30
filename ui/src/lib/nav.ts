@@ -1,4 +1,4 @@
-import { Blocks, Database, LayoutDashboard, ScrollText, Users } from "lucide-react";
+import { Blocks, ClipboardList, Database, LayoutDashboard, ScrollText, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 // The primary navigation, shared by the sidebar and the command palette (task #5) so they
@@ -48,6 +48,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Users,
     // Admin-only user management (Sprint 16g) — hidden from non-admins.
     match: (p) => p.startsWith("/users"),
+    adminOnly: true,
+  },
+  {
+    label: "Activity",
+    to: "/activity",
+    icon: ClipboardList,
+    // Admin-only audit log — hidden from non-admins.
+    match: (p) => p.startsWith("/activity"),
     adminOnly: true,
   },
 ];
