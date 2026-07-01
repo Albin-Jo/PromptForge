@@ -10,20 +10,12 @@ import { roleSatisfies } from "@/lib/auth/permissions";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-// Data-dense routes (multi-column stats + tables) want more horizontal room than the
-// reading-width pages. We widen the content column to 1536px on those and keep 1024px
-// elsewhere. (The sidebar sits outside this column; only the main content is constrained.)
-const WIDE_WIDTH = "max-w-[1536px]";
-const READING_WIDTH = "max-w-5xl";
+// One content width for every route, so switching tabs never re-centers or resizes the
+// column. Data-dense pages (tables) fill it; reading-oriented content (editor forms, detail
+// panes) self-caps with its own max-w and sits at the left. The sidebar lives outside this
+// column — only the main content is constrained.
+const CONTENT_WIDTH = "max-w-[1400px]";
 const COLLAPSE_KEY = "pf-sidebar-collapsed";
-
-function isWideRoute(pathname: string): boolean {
-  return (
-    pathname === "/" || // the fleet overview (index route) is data-dense
-    pathname.endsWith("/dashboard") ||
-    pathname.endsWith("/versions")
-  );
-}
 
 // The app shell: a persistent left sidebar (collapsible on desktop, a Sheet on mobile),
 // a sticky top bar, and a width-aware <main> where the active route renders.
@@ -74,8 +66,6 @@ export function AppLayout() {
     navigate("/login", { replace: true });
   }
 
-  const widthClass = isWideRoute(pathname) ? WIDE_WIDTH : READING_WIDTH;
-
   return (
     <div className="bg-background text-foreground flex min-h-screen">
       {/* Keyboard a11y: first tab stop jumps past the nav straight to the page body. */}
@@ -117,7 +107,7 @@ export function AppLayout() {
           onOpenCommand={() => setCommandOpen(true)}
           onLogout={handleLogout}
         />
-        <main id="main" className={cn("mx-auto w-full px-6 py-8", widthClass)}>
+        <main id="main" className={cn("mx-auto w-full px-6 py-8", CONTENT_WIDTH)}>
           <Outlet />
         </main>
       </div>

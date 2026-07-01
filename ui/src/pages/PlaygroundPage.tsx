@@ -136,7 +136,7 @@ export function PlaygroundPage() {
     <div>
       {/* Back-to-versions navigation is the breadcrumb's job now (the prompt-name crumb links
           to .../versions), so the header is just the title. */}
-      <h1 className="text-xl font-semibold">
+      <h1 className="text-2xl font-semibold tracking-tight">
         Playground — {name} <span className="text-muted-foreground">v{version_number}</span>
       </h1>
 

@@ -7,9 +7,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Design tokens. These are the RAW values; @theme inline below maps them to Tailwind
-   color utilities (bg-background, text-foreground, …). Slate base color, oklch space.
-   Light set lives in :root; .dark overrides the same names — that's the whole theming
-   mechanism. (slate base, generated from the shadcn registry.) */
+   color utilities (bg-background, text-foreground, …). Slate neutral base, oklch space,
+   with a single considered brand accent: cobalt (the --primary hue). Light set lives in
+   :root; .dark overrides the same names — that's the whole theming mechanism. */
 :root {
   --radius: 0.625rem;
 
@@ -19,7 +19,9 @@
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
+  /* Brand accent — cobalt. Drives primary buttons, links, focus rings, active nav, and the
+     brand mark. Kept at moderate chroma so it reads considered, not neon. */
+  --primary: oklch(0.55 0.16 252);
   --primary-foreground: oklch(0.984 0.003 247.858);
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
@@ -39,24 +41,25 @@
   --info-foreground: oklch(0.984 0.003 247.858);
   --border: oklch(0.929 0.013 255.508);
   --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
+  --ring: oklch(0.55 0.16 252);
 
-  /* Chart palette — used by Recharts in 16c. */
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* Chart palette — used by Recharts in 16c. Cobalt-led and harmonised: brand blue, steel,
+     indigo, green (reads as "quality"), amber (reads as "cost"). No violet/magenta. */
+  --chart-1: oklch(0.55 0.16 252);
+  --chart-2: oklch(0.62 0.1 210);
+  --chart-3: oklch(0.5 0.13 275);
+  --chart-4: oklch(0.62 0.14 155);
+  --chart-5: oklch(0.7 0.13 66);
 
   /* Sidebar — its own token group so the shell can diverge from page chrome. */
   --sidebar: oklch(0.984 0.003 247.858);
   --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
+  --sidebar-primary: oklch(0.55 0.16 252);
   --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
   --sidebar-accent: oklch(0.968 0.007 247.896);
   --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
   --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --sidebar-ring: oklch(0.55 0.16 252);
 }
 
 .dark {
@@ -66,8 +69,10 @@
   --card-foreground: oklch(0.984 0.003 247.858);
   --popover: oklch(0.208 0.042 265.755);
   --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
+  /* Brighter cobalt on dark surfaces, with a deep-navy foreground so text on the button
+     keeps AA contrast (white would be too low against a light-blue fill). */
+  --primary: oklch(0.66 0.15 248);
+  --primary-foreground: oklch(0.2 0.045 250);
   --secondary: oklch(0.279 0.041 260.031);
   --secondary-foreground: oklch(0.984 0.003 247.858);
   --muted: oklch(0.279 0.041 260.031);
@@ -85,22 +90,22 @@
   --info-foreground: oklch(0.15 0.03 240);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
+  --ring: oklch(0.62 0.14 250);
 
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  --chart-1: oklch(0.66 0.15 248);
+  --chart-2: oklch(0.72 0.11 205);
+  --chart-3: oklch(0.64 0.14 272);
+  --chart-4: oklch(0.72 0.14 158);
+  --chart-5: oklch(0.78 0.13 70);
 
   --sidebar: oklch(0.208 0.042 265.755);
   --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary: oklch(0.66 0.15 248);
   --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
   --sidebar-accent: oklch(0.279 0.041 260.031);
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --sidebar-ring: oklch(0.62 0.14 250);
 }
 
 /* Map tokens -> Tailwind theme. `inline` means utilities reference the var directly,
@@ -154,6 +159,23 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* Typeface + tinted shadows. Static values (identical in light/dark), so a plain @theme
+   block — not the inline one above. Geist is self-hosted via @fontsource-variable (imported
+   in main.tsx): no CDN dependency, works offline, matches the self-hosted product ethos.
+   Shadows carry a cool cobalt tint instead of flat black so elevation reads with the brand
+   rather than muddying it. */
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --shadow-2xs: 0 1px oklch(0.44 0.06 256 / 0.05);
+  --shadow-xs: 0 1px 2px 0 oklch(0.44 0.06 256 / 0.08);
+  --shadow-sm: 0 1px 2px 0 oklch(0.44 0.06 256 / 0.08), 0 2px 6px -2px oklch(0.44 0.06 256 / 0.1);
+  --shadow-md: 0 2px 4px -1px oklch(0.44 0.06 256 / 0.1), 0 6px 16px -6px oklch(0.44 0.06 256 / 0.14);
+  --shadow-lg: 0 4px 8px -2px oklch(0.44 0.06 256 / 0.1), 0 12px 28px -8px oklch(0.44 0.06 256 / 0.16);
+  --shadow-xl: 0 8px 16px -4px oklch(0.44 0.06 256 / 0.12), 0 20px 40px -12px oklch(0.44 0.06 256 / 0.18);
+}
+
 /* Base layer: every element gets the token border color by default, and the body
    adopts the themed background/foreground so pages inherit dark mode for free. */
 @layer base {
@@ -161,6 +183,16 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  /* Typography polish: keep headings and paragraphs from leaving orphaned words. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
 }

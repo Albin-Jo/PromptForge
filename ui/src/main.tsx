@@ -7,6 +7,11 @@ import { AuthProvider } from "./lib/auth/AuthContext";
 import { ThemeProvider } from "./lib/theme/ThemeProvider";
 import { Toaster } from "./components/ui/sonner";
 import { queryClient } from "./lib/queryClient";
+// Self-hosted Geist (weight axis only — no italics) so the app has no CDN font dependency
+// and works offline. The family names ("Geist Variable" / "Geist Mono Variable") are wired
+// into --font-sans / --font-mono in index.css.
+import "@fontsource-variable/geist/wght.css";
+import "@fontsource-variable/geist-mono/wght.css";
 import "./index.css";
 
 const rootElement = document.getElementById("root");

@@ -88,7 +88,7 @@ export function BlockEditorPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{isVersion ? `New version: ${name}` : "New block"}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{isVersion ? `New version: ${name}` : "New block"}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         {isVersion
           ? "Saving creates a new immutable version of this block."

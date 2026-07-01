@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/shell/BrandMark";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { NAV_ITEMS } from "@/lib/nav";
 import type { NavItem } from "@/lib/nav";
@@ -40,9 +41,13 @@ export function Sidebar({
         <Link
           to="/"
           onClick={onNavigate}
-          className="text-lg font-semibold tracking-tight"
+          aria-label="PromptForge home"
+          className="flex items-center gap-2.5"
         >
-          {collapsed ? "PF" : "PromptForge"}
+          <BrandMark />
+          {!collapsed && (
+            <span className="text-[15px] font-semibold tracking-tight">PromptForge</span>
+          )}
         </Link>
       </div>
 
@@ -61,8 +66,10 @@ export function Sidebar({
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  ? "bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary"
                   : "text-sidebar-foreground/70",
+                // A cobalt spine on the active item — the accent's clearest, most restrained use.
+                active && !collapsed && "shadow-[inset_2px_0_0_0_var(--primary)]",
                 collapsed && "justify-center px-0",
               )}
             >

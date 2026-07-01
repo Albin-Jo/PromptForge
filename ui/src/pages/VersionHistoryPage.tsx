@@ -36,7 +36,7 @@ export function VersionHistoryPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{name} — version history</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{name} — version history</h1>
       {name && (
         <div className="mt-4">
           <PromptTabs name={name} />

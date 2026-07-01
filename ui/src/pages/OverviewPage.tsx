@@ -19,6 +19,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { formatCost, formatMs, formatPct, formatQuality } from "@/lib/metrics/format";
 import { bucketsToTrend, formatBucketLabel, formatBucketTick } from "@/lib/metrics/timeseries";
@@ -51,7 +59,7 @@ function StatCard({
     <Card>
       <CardHeader className="pb-2">
         <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+        <CardTitle className="font-mono text-2xl tabular-nums tracking-tight">{value}</CardTitle>
       </CardHeader>
       <CardContent>
         <Sparkline data={series} color={color} height={36} aria-label={`${label} trend`} className="w-full" />
@@ -212,7 +220,7 @@ function AllPrompts({ prompts, window }: { prompts: PromptRollup[]; window: Metr
     const active = sort.key === sortKey;
     const Icon = !active ? ChevronsUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
     return (
-      <th className={align === "right" ? "py-2 text-right font-medium" : "py-2 font-medium"}>
+      <TableHead className={align === "right" ? "text-right" : undefined}>
         <button
           type="button"
           onClick={() => toggle(sortKey)}
@@ -223,7 +231,7 @@ function AllPrompts({ prompts, window }: { prompts: PromptRollup[]; window: Metr
           <Icon className="size-3" />
         </button>
         {hint && <InfoHint text={hint} className="ml-1" />}
-      </th>
+      </TableHead>
     );
   };
 
@@ -241,64 +249,62 @@ function AllPrompts({ prompts, window }: { prompts: PromptRollup[]; window: Metr
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <table aria-label="All prompts" className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-border border-b text-left">
-                <SortHeader label="Prompt" sortKey="name" align="left" />
-                <SortHeader label="Requests" sortKey="request_count" />
-                <SortHeader label="Error rate" sortKey="error_rate" />
-                <SortHeader label="p95 (ms)" sortKey="p95_ms" />
-                <SortHeader label="Cost (USD)" sortKey="cost_usd" />
-                <SortHeader
-                  label="Quality (0–1)"
-                  sortKey="quality"
-                  hint="Eval quality score from 0 to 1 — higher is better, 1.0 is perfect."
-                />
-                <th className="py-2 pl-4 font-medium">Health</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((p) => (
-                <tr key={p.name} className="border-border/60 border-b">
-                  <td className="py-2 font-medium">
-                    <Link
-                      to={`/prompts/${encodeURIComponent(p.name)}/dashboard`}
-                      className="hover:underline"
-                    >
-                      {p.name}
-                    </Link>
-                    <span className="text-muted-foreground ml-2 text-xs">
-                      {p.latest_version !== null ? `v${p.latest_version}` : "—"}
-                    </span>
-                  </td>
-                  <td className="py-2 text-right tabular-nums">{p.request_count.toLocaleString()}</td>
-                  <td className="py-2 text-right tabular-nums">{formatPct(p.error_rate)}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMs(p.p95_ms)}</td>
-                  <td className="py-2 text-right tabular-nums">{formatCost(p.cost_usd)}</td>
-                  <td className="py-2 text-right tabular-nums">{formatQuality(p.quality)}</td>
-                  <td className="py-2 pl-4">
-                    {p.attention.length === 0 ? (
-                      <CheckCircle2 className="size-4 text-success" aria-label="healthy" />
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {ATTENTION_ORDER.filter((r) => p.attention.includes(r)).map((r) => (
-                          <Badge
-                            key={r}
-                            variant={ATTENTION_META[r].variant}
-                            title={ATTENTION_META[r].description}
-                          >
-                            {ATTENTION_META[r].label}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table aria-label="All prompts">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <SortHeader label="Prompt" sortKey="name" align="left" />
+              <SortHeader label="Requests" sortKey="request_count" />
+              <SortHeader label="Error rate" sortKey="error_rate" />
+              <SortHeader label="p95 (ms)" sortKey="p95_ms" />
+              <SortHeader label="Cost (USD)" sortKey="cost_usd" />
+              <SortHeader
+                label="Quality (0–1)"
+                sortKey="quality"
+                hint="Eval quality score from 0 to 1 — higher is better, 1.0 is perfect."
+              />
+              <TableHead className="pl-4">Health</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorted.map((p) => (
+              <TableRow key={p.name}>
+                <TableCell className="font-medium">
+                  <Link
+                    to={`/prompts/${encodeURIComponent(p.name)}/dashboard`}
+                    className="hover:underline"
+                  >
+                    {p.name}
+                  </Link>
+                  <span className="text-muted-foreground ml-2 text-xs">
+                    {p.latest_version !== null ? `v${p.latest_version}` : "—"}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{p.request_count.toLocaleString()}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatPct(p.error_rate)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMs(p.p95_ms)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatCost(p.cost_usd)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatQuality(p.quality)}</TableCell>
+                <TableCell className="pl-4">
+                  {p.attention.length === 0 ? (
+                    <CheckCircle2 className="size-4 text-success" aria-label="healthy" />
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {ATTENTION_ORDER.filter((r) => p.attention.includes(r)).map((r) => (
+                        <Badge
+                          key={r}
+                          variant={ATTENTION_META[r].variant}
+                          title={ATTENTION_META[r].description}
+                        >
+                          {ATTENTION_META[r].label}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   );
