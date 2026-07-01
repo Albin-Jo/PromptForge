@@ -51,6 +51,26 @@ class UserAlreadyExistsError(Exception):
         self.email = email
 
 
+class UserNotFoundError(Exception):
+    """Raised when updating/revoking a user id that doesn't exist (mapped to 404)."""
+
+    def __init__(self, user_id: uuid.UUID) -> None:
+        super().__init__(f"user '{user_id}' not found")
+        self.user_id = user_id
+
+
+class LastAdminError(Exception):
+    """Raised when a change would leave the platform with no active admin (mapped to 409).
+
+    The self-lockout guard (ADR 0029): demoting or deactivating the *last* active admin is
+    refused, so an admin can't accidentally lock everyone out of user management. The rule is
+    "at least one active admin must remain" — an admin may still demote/disable *other* admins.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("cannot remove the last active admin")
+
+
 @dataclass(frozen=True)
 class TokenPair:
     """The result of a successful login: a short access token + a long refresh token."""
@@ -62,6 +82,16 @@ class TokenPair:
 def _normalise_email(email: str) -> str:
     """Lower-case and trim so uniqueness and lookups are case-insensitive."""
     return email.strip().lower()
+
+
+def _describe_update(user: User, role: str | None, is_active: bool | None) -> str:
+    """Human-readable audit target for a user update, naming only the fields that changed."""
+    changes = []
+    if role is not None:
+        changes.append(f"role={role}")
+    if is_active is not None:
+        changes.append("active" if is_active else "inactive")
+    return f"user:{user.email} ({', '.join(changes)})"
 
 
 class AuthService:
@@ -106,6 +136,7 @@ class AuthService:
             token_type="access",
             secret=self._jwt_secret,
             ttl_seconds=self._access_ttl,
+            token_version=user.token_version,
         )
         refresh = create_token(
             subject=user.id,
@@ -113,6 +144,7 @@ class AuthService:
             token_type="refresh",
             secret=self._jwt_secret,
             ttl_seconds=self._refresh_ttl,
+            token_version=user.token_version,
         )
         return TokenPair(access_token=access, refresh_token=refresh)
 
@@ -123,13 +155,15 @@ class AuthService:
     def refresh(self, refresh_token: str) -> str:
         """Exchange a valid refresh token for a fresh access token.
 
-        Re-loads the user and refuses a disabled account. Raises
+        Re-loads the user and refuses a disabled account or a **revoked** token (its
+        ``token_version`` no longer matches the user's — ADR 0029). Raises
         :class:`promptforge_api.tokens.InvalidTokenError` for a bad/expired refresh token and
-        :class:`InvalidCredentialsError` if the user no longer exists or is disabled.
+        :class:`InvalidCredentialsError` if the user no longer exists, is disabled, or the token
+        has been revoked.
         """
         claims = decode_token(refresh_token, secret=self._jwt_secret, expected_type="refresh")
         user = self._repository.get_by_id(claims.subject)
-        if user is None or not user.is_active:
+        if user is None or not user.is_active or claims.token_version != user.token_version:
             raise InvalidCredentialsError
         return create_token(
             subject=user.id,
@@ -137,6 +171,7 @@ class AuthService:
             token_type="access",
             secret=self._jwt_secret,
             ttl_seconds=self._access_ttl,
+            token_version=user.token_version,
         )
 
     def create_user(
@@ -163,12 +198,78 @@ class AuthService:
         """Return every user (admin-only at the boundary), newest first."""
         return self._repository.list_all()
 
+    def update_user(
+        self,
+        user_id: uuid.UUID,
+        *,
+        role: str | None = None,
+        is_active: bool | None = None,
+        actor: str = "system",
+    ) -> User:
+        """Change a user's role and/or active flag (admin-only at the boundary).
+
+        Only the fields passed (non-``None``) are touched. Raises :class:`UserNotFoundError` for an
+        unknown id and :class:`LastAdminError` if the change would leave no active admin. A role
+        change or a deactivation **bumps** the user's ``token_version`` (ADR 0029) so outstanding
+        tokens are revoked and the client must re-authenticate.
+        """
+        user = self._repository.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(user_id)
+
+        role_changed = role is not None and role != user.role
+        deactivating = is_active is False and user.is_active
+
+        # Self-lockout guard: if this user is an active admin and the change takes them out of the
+        # active-admin set (demote or deactivate), require at least one *other* active admin.
+        leaving_admin_set = user.is_active and user.role == "admin" and (
+            (role is not None and role != "admin") or deactivating
+        )
+        if leaving_admin_set and self._repository.count_active_admins(exclude=user_id) == 0:
+            raise LastAdminError
+
+        if role is not None:
+            user.role = role
+        if is_active is not None:
+            user.is_active = is_active
+        # Revoke outstanding tokens on a role change or deactivation (not on a pure reactivation:
+        # there's nothing valid to invalidate, and a bump would needlessly log the user out again).
+        if role_changed or deactivating:
+            user.token_version += 1
+
+        self._repository.flush()
+        if self._audits is not None:
+            self._audits.record(
+                actor=actor, action="user_updated", target=_describe_update(user, role, is_active)
+            )
+        return user
+
+    def revoke_tokens(self, user_id: uuid.UUID, *, actor: str = "system") -> User:
+        """Invalidate all of a user's outstanding tokens by bumping ``token_version`` (ADR 0029).
+
+        The "log this user out everywhere" action — a leaked-credential response that doesn't
+        change the account's role or active state. Raises :class:`UserNotFoundError` for an
+        unknown id.
+        """
+        user = self._repository.get_by_id(user_id)
+        if user is None:
+            raise UserNotFoundError(user_id)
+        user.token_version += 1
+        self._repository.flush()
+        if self._audits is not None:
+            self._audits.record(
+                actor=actor, action="tokens_revoked", target=f"user:{user.email}"
+            )
+        return user
+
 
 # Re-exported so callers can `except InvalidTokenError` from the service module if they prefer.
 __all__ = [
     "AuthService",
     "InvalidCredentialsError",
     "InvalidTokenError",
+    "LastAdminError",
     "TokenPair",
     "UserAlreadyExistsError",
+    "UserNotFoundError",
 ]

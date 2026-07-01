@@ -25,7 +25,11 @@ from promptforge_api.exceptions import (
     TraceNotFoundError,
     VersionNotFoundError,
 )
-from promptforge_api.services.auth import UserAlreadyExistsError
+from promptforge_api.services.auth import (
+    LastAdminError,
+    UserAlreadyExistsError,
+    UserNotFoundError,
+)
 from promptforge_api.services.blocks import (
     BlockAlreadyExistsError,
     BlockInUseError,
@@ -73,6 +77,10 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     BlockInUseError: status.HTTP_409_CONFLICT,
     # Human auth (Sprint 13): creating a user whose email is taken is a name clash.
     UserAlreadyExistsError: status.HTTP_409_CONFLICT,
+    # User management (Sprint 31 / ADR 0029): unknown id → 404; a change that would remove the
+    # last active admin (self-lockout) is refused as a conflict.
+    UserNotFoundError: status.HTTP_404_NOT_FOUND,
+    LastAdminError: status.HTTP_409_CONFLICT,
 }
 
 

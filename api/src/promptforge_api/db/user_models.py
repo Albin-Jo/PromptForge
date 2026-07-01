@@ -13,7 +13,7 @@ RBAC and multi-tenancy are post-v0.1 (overview §4).
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, String, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from promptforge_api.db.base import Base
@@ -42,6 +42,10 @@ class User(Base):
     # Soft on/off switch: a disabled user keeps their row (and audit trail) but can't log in.
     # server_default backs non-ORM inserts; the Python default keeps an in-memory user truthy.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
+    # Token generation counter (ADR 0029). Stamped into every minted token; a verify compares the
+    # token's claim against this. Bumping it (revoke / deactivate / role-change) invalidates all of
+    # a user's outstanding tokens at once — the revocation mechanism, without a per-token store.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
