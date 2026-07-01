@@ -8,7 +8,6 @@ the response shape.
 
 from collections.abc import Callable
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -56,8 +55,8 @@ def test_audit_log_lists_promotion_events(
     db_session: Session,
 ) -> None:
     """End-to-end: promote a prompt → audit row is visible in /audit-log."""
+    from promptforge_api.db.audit_models import AuditEvent
     from promptforge_api.db.models import Prompt
-    from promptforge_api.db.promotion_models import PromotionAudit
 
     admin = _token(auth_client, make_user, "adm2@example.com", "admin")
 
@@ -66,11 +65,12 @@ def test_audit_log_lists_promotion_events(
     db_session.add(prompt)
     db_session.flush()
 
-    audit_row = PromotionAudit(
+    audit_row = AuditEvent(
         prompt_id=prompt.id,
         label="production",
         to_version_number=1,
-        decision="promoted",
+        action="promoted",
+        target="test-prompt:production → v1",
         reason="all gates passed",
         actor="adm2@example.com",
     )

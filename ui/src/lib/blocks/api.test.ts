@@ -10,10 +10,12 @@ import {
   blockKeys,
   createBlock,
   createBlockVersion,
+  deleteBlock,
   getBlockVersion,
   listBlockVersions,
   useCreateBlock,
   useCreateBlockVersion,
+  useDeleteBlock,
 } from "./api";
 
 const mockedFetch = vi.mocked(apiFetch);
@@ -51,6 +53,12 @@ describe("block request functions hit the right endpoints", () => {
     await createBlockVersion("greeting", body);
     expect(mockedFetch).toHaveBeenCalledWith("/blocks/greeting/versions", { method: "POST", body });
   });
+
+  it("deleteBlock DELETEs the block", async () => {
+    mockedFetch.mockResolvedValue(null as never);
+    await deleteBlock("greeting");
+    expect(mockedFetch).toHaveBeenCalledWith("/blocks/greeting", { method: "DELETE" });
+  });
 });
 
 describe("block mutations invalidate the catalog", () => {
@@ -78,5 +86,17 @@ describe("block mutations invalidate the catalog", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: blockKeys.all });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: blockKeys.detail("g") });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: blockKeys.versions("g") });
+  });
+
+  it("useDeleteBlock invalidates the catalog (so the list + picker drop it)", async () => {
+    mockedFetch.mockResolvedValue(null as never);
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    const { result } = renderHook(() => useDeleteBlock(), { wrapper: wrapperWith(client) });
+    result.current.mutate("greeting");
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: blockKeys.all });
   });
 });

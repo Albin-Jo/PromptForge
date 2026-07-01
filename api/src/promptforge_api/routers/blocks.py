@@ -146,6 +146,20 @@ def block_impact(name: str, service: ServiceDep) -> BlockImpactResponse:
     return _to_impact_response(name, service.impact_of(name))
 
 
+@router.delete(
+    "/{name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_editor)],
+)
+def delete_block(name: str, service: ServiceDep) -> None:
+    """Delete a block; refuses with 409 if a prompt or block still composes with it (ADR 0027).
+
+    404 if the block doesn't exist. The 409 body names the offending prompt/block versions so the
+    caller knows exactly which references to detach first.
+    """
+    service.delete_block(name)
+
+
 def _to_impact_response(name: str, impact: BlockImpact) -> BlockImpactResponse:
     """Map the service's domain ``BlockImpact`` onto the API DTO."""
 

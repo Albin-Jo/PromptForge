@@ -47,12 +47,12 @@ from random import Random
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from promptforge_api.db.audit_models import AuditEvent
 from promptforge_api.db.block_models import Block, BlockVersion
 from promptforge_api.db.composition_models import BlockVersionBlock, PromptVersionBlock
 from promptforge_api.db.engine import SessionLocal
 from promptforge_api.db.eval_models import Dataset, DatasetItem, EvalRun, ScoreRecord
 from promptforge_api.db.models import Label, Prompt, PromptVersion
-from promptforge_api.db.promotion_models import PromotionAudit
 from promptforge_api.db.scan_models import SecurityScan
 from promptforge_api.db.trace_models import Trace
 from promptforge_api.db.user_models import User
@@ -1387,14 +1387,15 @@ def seed(session: Session) -> dict[str, int]:
         if prod is not None and prod > 1:
             frm = pv_by[(spec.name, prod - 1)]
             to = pv_by[(spec.name, prod)]
-            audit = PromotionAudit(
+            audit = AuditEvent(
                 prompt_id=to.prompt_id,
                 label="production",
                 to_version_id=to.id,
                 to_version_number=prod,
                 from_version_id=frm.id,
                 from_version_number=prod - 1,
-                decision="promoted",
+                action="promoted",
+                target=f"{spec.name}:production → v{prod}",
                 actor=PROMOTION_ACTOR,
                 reason=f"v{prod} cleared the quality gate (no regression vs v{prod - 1}).",
                 detail={"eval_run": None, "gate": "passed"},
@@ -1406,14 +1407,15 @@ def seed(session: Session) -> dict[str, int]:
             bvnum = spec.blocked_version
             cand = pv_by[(spec.name, bvnum)]
             frm = pv_by[(spec.name, bvnum - 1)] if bvnum > 1 else None
-            audit = PromotionAudit(
+            audit = AuditEvent(
                 prompt_id=cand.prompt_id,
                 label="production",
                 to_version_id=cand.id,
                 to_version_number=bvnum,
                 from_version_id=frm.id if frm else None,
                 from_version_number=(bvnum - 1) if frm else None,
-                decision="blocked",
+                action="blocked",
+                target=f"{spec.name}:production → v{bvnum}",
                 actor=PROMOTION_ACTOR,
                 reason="scorer llm_judge regressed 0.08 below production (gate floor 0.05).",
                 detail={"scorer": "llm_judge", "drop": 0.08, "gate": "blocked"},
@@ -1496,7 +1498,7 @@ _WIPE_ORDER: tuple[type, ...] = (
     ScoreRecord,
     EvalRun,
     SecurityScan,
-    PromotionAudit,
+    AuditEvent,
     PromptVersionBlock,
     BlockVersionBlock,
     Label,

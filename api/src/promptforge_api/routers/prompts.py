@@ -14,15 +14,16 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from promptforge_api import enqueue
-from promptforge_api.authz import require_admin, require_editor
+from promptforge_api.authz import audit_actor, require_admin, require_editor
 from promptforge_api.cache import get_cache, get_cache_stats
 from promptforge_api.composition.builder import BlockRef
 from promptforge_api.config import Settings, get_settings
 from promptforge_api.db.engine import get_session
+from promptforge_api.db.user_models import User
 from promptforge_api.promotion import PromotionPolicy
+from promptforge_api.repositories.audit import AuditRepository
 from promptforge_api.repositories.composition import CompositionRepository
 from promptforge_api.repositories.evals import EvalRepository
-from promptforge_api.repositories.promotion import PromotionAuditRepository
 from promptforge_api.repositories.prompts import PromptRepository
 from promptforge_api.repositories.scans import ScanRepository
 from promptforge_api.schemas import (
@@ -46,7 +47,7 @@ from promptforge_api.schemas import (
     ScanStatusResponse,
     VersionCreate,
 )
-from promptforge_api.security import promotion_actor, require_api_key
+from promptforge_api.security import require_api_key
 from promptforge_api.security_gate import SecurityGatePolicy
 from promptforge_api.services.evals import EvalService
 from promptforge_api.services.promotion import (
@@ -65,7 +66,6 @@ from promptforge_api.services.scans import ScanService
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
-ActorDep = Annotated[str, Depends(promotion_actor)]
 
 
 def _to_block_refs(refs: list[BlockRefDTO]) -> list[BlockRef]:
@@ -87,9 +87,12 @@ def _to_render_response(rendered: RenderedPrompt) -> RenderResponse:
 
 
 def _eval_service(session: Session) -> EvalService:
-    """The eval/golden-set service, wired to the real Celery enqueue."""
+    """The eval/golden-set service, wired to the real Celery enqueue + the audit sink."""
     return EvalService(
-        EvalRepository(session), PromptRepository(session), submit_eval=enqueue.submit_eval
+        EvalRepository(session),
+        PromptRepository(session),
+        submit_eval=enqueue.submit_eval,
+        audits=AuditRepository(session),
     )
 
 
@@ -113,9 +116,10 @@ def get_scan_service(session: SessionDep) -> ScanService:
 def get_prompt_service(session: SessionDep) -> PromptService:
     """Assemble the service with a request-scoped session, cache, the promotion gate, and scans."""
     settings = get_settings()
+    audits = AuditRepository(session)
     gate = PromotionGate(
         _eval_service(session),
-        PromotionAuditRepository(session),
+        audits,
         policy=PromotionPolicy.from_settings(settings),
         submit_webhook=enqueue.make_webhook_submit(settings),
         scans=_scan_service(session),
@@ -127,6 +131,7 @@ def get_prompt_service(session: SessionDep) -> PromptService:
         composition=CompositionRepository(session),
         gate=gate,
         scans=_scan_service(session),
+        audits=audits,
         cache_ttl_seconds=settings.render_cache_ttl_seconds,
         cache_stats=get_cache_stats(),
     )
@@ -148,9 +153,12 @@ def list_prompts(service: ServiceDep) -> list[PromptSummaryRead]:
     "",
     status_code=status.HTTP_201_CREATED,
     response_model=PromptRead,
-    dependencies=[Depends(require_editor)],
 )
-def create_prompt(payload: PromptCreate, service: ServiceDep) -> PromptRead:
+def create_prompt(
+    payload: PromptCreate,
+    service: ServiceDep,
+    actor_user: Annotated[User | None, Depends(require_editor)],
+) -> PromptRead:
     """Create a prompt and its first version. Authoring action — editor or admin."""
     prompt = service.create_prompt(
         name=payload.name,
@@ -160,6 +168,7 @@ def create_prompt(payload: PromptCreate, service: ServiceDep) -> PromptRead:
         model_settings=payload.model_settings,
         output_schema=payload.output_schema,
         blocks=_to_block_refs(payload.blocks),
+        actor=audit_actor(actor_user),
     )
     return PromptRead.model_validate(prompt)
 
@@ -192,9 +201,13 @@ def get_prompt(name: str, service: ServiceDep) -> PromptRead:
     "/{name}/versions",
     status_code=status.HTTP_201_CREATED,
     response_model=PromptVersionRead,
-    dependencies=[Depends(require_editor)],
 )
-def create_version(name: str, payload: VersionCreate, service: ServiceDep) -> PromptVersionRead:
+def create_version(
+    name: str,
+    payload: VersionCreate,
+    service: ServiceDep,
+    actor_user: Annotated[User | None, Depends(require_editor)],
+) -> PromptVersionRead:
     """Append a new immutable version to an existing prompt. Authoring action — editor or admin."""
     version = service.add_version(
         name=name,
@@ -203,13 +216,20 @@ def create_version(name: str, payload: VersionCreate, service: ServiceDep) -> Pr
         model_settings=payload.model_settings,
         output_schema=payload.output_schema,
         blocks=_to_block_refs(payload.blocks),
+        actor=audit_actor(actor_user),
     )
     return PromptVersionRead.model_validate(version)
 
 
 @router.get("/{name}/versions", response_model=list[PromptVersionRead])
 def list_versions(name: str, service: ServiceDep) -> list[PromptVersionRead]:
-    """List a prompt's version history, oldest first."""
+    """List a prompt's version history, oldest first.
+
+    API-only (Sprint 30 T4): provided for the SDK / CLI / curl. The browser reads history from the
+    aggregate ``GET /prompts/{name}``, so the UI never calls this route. Adopting these routes to
+    fix that aggregate's over-fetch is tracked separately (docs/learning-backlog.md, Sprint 3 tech
+    debt) and is deliberately *not* built here.
+    """
     versions = service.list_versions(name)
     reads = [PromptVersionRead.model_validate(v) for v in versions]
     _with_blocks(reads, service)
@@ -218,7 +238,13 @@ def list_versions(name: str, service: ServiceDep) -> list[PromptVersionRead]:
 
 @router.get("/{name}/versions/{version_number}", response_model=PromptVersionRead)
 def get_version(name: str, version_number: int, service: ServiceDep) -> PromptVersionRead:
-    """Fetch a single version of a prompt by number."""
+    """Fetch a single version of a prompt by number.
+
+    API-only (Sprint 30 T4): provided for the SDK / CLI / curl. The browser reads a specific version
+    from the aggregate ``GET /prompts/{name}`` it already holds, so the UI never calls this route.
+    The matching over-fetch in ``get_version`` is tracked separately (docs/learning-backlog.md,
+    Sprint 3 tech debt) and is deliberately *not* fixed here.
+    """
     version = service.get_version(name, version_number)
     read = PromptVersionRead.model_validate(version)
     _with_blocks([read], service)
@@ -293,10 +319,13 @@ def get_render_cache_stats(
             )
         }
     },
-    dependencies=[Depends(require_admin)],
 )
 def set_label(
-    name: str, label: str, payload: LabelSet, service: ServiceDep, actor: ActorDep
+    name: str,
+    label: str,
+    payload: LabelSet,
+    service: ServiceDep,
+    actor_user: Annotated[User | None, Depends(require_admin)],
 ) -> Response:
     """Point a label at a version (creating or moving it). Moving the gated label = a deploy.
 
@@ -305,7 +334,7 @@ def set_label(
     gets **409** with the ``eval_run_id`` to poll. Any other label moves freely.
     """
     result = service.set_label(
-        name=name, label=label, version_number=payload.version_number, actor=actor
+        name=name, label=label, version_number=payload.version_number, actor=audit_actor(actor_user)
     )
     if isinstance(result, PromotionPromoted):
         body = LabelRead(
@@ -338,22 +367,31 @@ def resolve_label(name: str, label: str, service: ServiceDep) -> PromptVersionRe
 @router.put(
     "/{name}/golden-set",
     response_model=PromptRead,
-    dependencies=[Depends(require_editor)],
 )
-def attach_golden_set(name: str, payload: GoldenSetAttach, service: EvalServiceDep) -> PromptRead:
+def attach_golden_set(
+    name: str,
+    payload: GoldenSetAttach,
+    service: EvalServiceDep,
+    actor_user: Annotated[User | None, Depends(require_editor)],
+) -> PromptRead:
     """Point a prompt at the golden set it must clear to be promoted (Sprint 11)."""
-    prompt = service.attach_golden_set(prompt_name=name, dataset_name=payload.dataset)
+    prompt = service.attach_golden_set(
+        prompt_name=name, dataset_name=payload.dataset, actor=audit_actor(actor_user)
+    )
     return PromptRead.model_validate(prompt)
 
 
 @router.delete(
     "/{name}/golden-set",
     response_model=PromptRead,
-    dependencies=[Depends(require_editor)],
 )
-def detach_golden_set(name: str, service: EvalServiceDep) -> PromptRead:
+def detach_golden_set(
+    name: str,
+    service: EvalServiceDep,
+    actor_user: Annotated[User | None, Depends(require_editor)],
+) -> PromptRead:
     """Clear a prompt's golden set (so it has no promotion gate, and its set can be deleted)."""
-    prompt = service.detach_golden_set(prompt_name=name)
+    prompt = service.detach_golden_set(prompt_name=name, actor=audit_actor(actor_user))
     return PromptRead.model_validate(prompt)
 
 

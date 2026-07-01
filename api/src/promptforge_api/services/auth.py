@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from promptforge_api.db.user_models import User
+from promptforge_api.repositories.audit import AuditRepository
 from promptforge_api.repositories.users import UserRepository
 from promptforge_api.security import hash_password, verify_password
 from promptforge_api.tokens import InvalidTokenError, create_token, decode_token
@@ -73,11 +74,15 @@ class AuthService:
         jwt_secret: str,
         access_ttl_seconds: int,
         refresh_ttl_seconds: int,
+        audits: AuditRepository | None = None,
     ) -> None:
         self._repository = repository
         self._jwt_secret = jwt_secret
         self._access_ttl = access_ttl_seconds
         self._refresh_ttl = refresh_ttl_seconds
+        # Optional audit sink: with it, user creation appends an audit_events row (ADR 0028).
+        # Without it (login/refresh/current-user paths and unit tests), it's a no-op.
+        self._audits = audits
 
     def authenticate(self, email: str, password: str) -> User:
         """Return the active user for valid credentials, else raise InvalidCredentialsError."""
@@ -134,7 +139,9 @@ class AuthService:
             ttl_seconds=self._access_ttl,
         )
 
-    def create_user(self, email: str, password: str, role: str) -> User:
+    def create_user(
+        self, email: str, password: str, role: str, *, actor: str = "system"
+    ) -> User:
         """Create a user with a hashed password. Raises UserAlreadyExistsError on a clash."""
         normalised = _normalise_email(email)
         if self._repository.get_by_email(normalised) is not None:
@@ -142,6 +149,10 @@ class AuthService:
         user = User(email=normalised, password_hash=hash_password(password), role=role)
         self._repository.add(user)
         self._repository.flush()
+        if self._audits is not None:
+            self._audits.record(
+                actor=actor, action="user_created", target=f"user:{normalised} ({role})"
+            )
         return user
 
     def get_user(self, user_id: uuid.UUID) -> User | None:

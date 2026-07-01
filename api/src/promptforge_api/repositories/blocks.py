@@ -21,6 +21,14 @@ class BlockRepository:
         """Stage a new block (and any versions attached to it) for insert."""
         self._session.add(block)
 
+    def delete(self, block: Block) -> None:
+        """Stage a block for deletion; its versions go via ``delete-orphan`` cascade.
+
+        The service guards against deleting an in-use block first (ADR 0027); the DB's
+        ``ON DELETE RESTRICT`` on the composition edges is the backstop. Caller flushes.
+        """
+        self._session.delete(block)
+
     def flush(self) -> None:
         """Emit pending INSERTs now so DB-side defaults/constraints take effect."""
         self._session.flush()

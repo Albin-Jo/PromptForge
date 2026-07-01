@@ -31,11 +31,11 @@ from typing import Any
 
 import structlog
 
+from promptforge_api.db.audit_models import AuditEvent
 from promptforge_api.db.models import Label, Prompt, PromptVersion
-from promptforge_api.db.promotion_models import PromotionAudit
 from promptforge_api.exceptions import GoldenSetMissingError
 from promptforge_api.promotion import PromotionPolicy, RunSummary, decide
-from promptforge_api.repositories.promotion import PromotionAuditRepository
+from promptforge_api.repositories.audit import AuditRepository
 from promptforge_api.security_gate import SecurityGatePolicy, risk_blocks
 from promptforge_api.services.evals import EvalService
 from promptforge_api.services.scans import ScanService
@@ -93,7 +93,7 @@ class PromotionGate:
     def __init__(
         self,
         evals: EvalService,
-        audits: PromotionAuditRepository,
+        audits: AuditRepository,
         *,
         policy: PromotionPolicy,
         submit_webhook: WebhookSubmit,
@@ -281,14 +281,15 @@ class PromotionGate:
         detail: dict[str, Any],
     ) -> None:
         self._audits.add(
-            PromotionAudit(
+            AuditEvent(
                 prompt_id=prompt.id,
                 label=label,
                 to_version_id=candidate.id,
                 to_version_number=candidate.version_number,
                 from_version_id=previous.id if previous is not None else None,
                 from_version_number=previous.version_number if previous is not None else None,
-                decision=decision,
+                action=decision,
+                target=f"{prompt.name}:{label} → v{candidate.version_number}",
                 reason=reason,
                 actor=actor,
                 detail=detail,

@@ -28,6 +28,7 @@ from promptforge_api.exceptions import (
 from promptforge_api.services.auth import UserAlreadyExistsError
 from promptforge_api.services.blocks import (
     BlockAlreadyExistsError,
+    BlockInUseError,
     BlockNotFoundError,
     BlockVersionNotFoundError,
 )
@@ -68,6 +69,8 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     EmptyGoldenSetError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     # Deleting a dataset a prompt still gates on is a conflict, not a not-found (ADR 0024).
     DatasetInUseError: status.HTTP_409_CONFLICT,
+    # Deleting a block a prompt/block still composes with is the same conflict (ADR 0027).
+    BlockInUseError: status.HTTP_409_CONFLICT,
     # Human auth (Sprint 13): creating a user whose email is taken is a name clash.
     UserAlreadyExistsError: status.HTTP_409_CONFLICT,
 }

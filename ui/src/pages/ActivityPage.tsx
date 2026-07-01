@@ -1,8 +1,10 @@
 import { ClipboardList } from "lucide-react";
 
 import { useAuditEvents } from "../lib/audit/api";
+import { formatAction } from "../lib/audit/format";
 import { EmptyState } from "../components/EmptyState";
 import { QueryState } from "../components/QueryState";
+import { Badge } from "../components/ui/badge";
 import { Card } from "../components/ui/card";
 import {
   Table,
@@ -53,7 +55,9 @@ export function ActivityPage() {
                   {data.events.map((event) => (
                     <TableRow key={event.id}>
                       <TableCell className="font-medium">{event.actor}</TableCell>
-                      <TableCell className="text-muted-foreground">{event.action}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{formatAction(event.action)}</Badge>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{event.target}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(event.timestamp).toLocaleString()}

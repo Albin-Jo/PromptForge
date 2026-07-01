@@ -15,6 +15,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import promptforge_api.db.audit_models  # noqa: F401
+
 # Importing the model modules registers every table on Base.metadata. The
 # noqa keeps the lint-only "unused import" off imports we need for their side
 # effect of populating the metadata.
@@ -22,7 +24,6 @@ import promptforge_api.db.block_models  # noqa: F401
 import promptforge_api.db.composition_models  # noqa: F401
 import promptforge_api.db.eval_models  # noqa: F401
 import promptforge_api.db.models  # noqa: F401
-import promptforge_api.db.promotion_models  # noqa: F401
 import promptforge_api.db.scan_models  # noqa: F401
 import promptforge_api.db.trace_models  # noqa: F401
 import promptforge_api.db.user_models  # noqa: F401

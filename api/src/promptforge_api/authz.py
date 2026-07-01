@@ -78,6 +78,16 @@ def get_current_user(
 CurrentUserDep = Annotated["User | None", Depends(get_current_user)]
 
 
+def audit_actor(user: User | None) -> str:
+    """The audit trail's "who": the authenticated user's email, or ``system`` when auth is off.
+
+    Every audited action — version/user create, golden-set attach, and label moves/promotions —
+    attributes to a real human via the ``require_*`` dependency's returned ``User`` (ADR 0028). A
+    single convention keeps the Activity feed consistent.
+    """
+    return user.email if user is not None else "system"
+
+
 def _require_role(*allowed: str):  # type: ignore[no-untyped-def]
     """Build a dependency that admits only the given roles (and is a no-op when auth is off)."""
 

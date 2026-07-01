@@ -53,6 +53,16 @@ export function createBlockVersion(name: string, body: BlockVersionCreate): Prom
   });
 }
 
+/**
+ * Delete a block. Can 409 (`BlockInUseError`) when a prompt or another block still composes with
+ * it — we let apiFetch throw `ApiError` and the dialog reads `err.message` (which names the
+ * dependent prompt/block versions), the same "409-is-state, not error" handling as the dataset
+ * delete (ADR 0027 / 0023).
+ */
+export function deleteBlock(name: string): Promise<void> {
+  return apiFetch<void>(`/blocks/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
 /** Server-state hook for the full block catalog (list page + the composition picker). */
 export function useBlocks() {
   return useQuery({
@@ -87,6 +97,17 @@ export function useCreateBlock() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: createBlock,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: blockKeys.all });
+    },
+  });
+}
+
+/** Delete a block; refreshes the catalog on success. (409-in-use is surfaced by the caller.) */
+export function useDeleteBlock() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deleteBlock,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: blockKeys.all });
     },

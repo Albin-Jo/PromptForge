@@ -20,14 +20,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from promptforge_api.cache import NullCache
+from promptforge_api.db.audit_models import AuditEvent
 from promptforge_api.db.engine import get_session
-from promptforge_api.db.promotion_models import PromotionAudit
 from promptforge_api.db.scan_models import SecurityScan
 from promptforge_api.main import create_app
 from promptforge_api.promotion import PromotionPolicy
+from promptforge_api.repositories.audit import AuditRepository
 from promptforge_api.repositories.composition import CompositionRepository
 from promptforge_api.repositories.evals import EvalRepository
-from promptforge_api.repositories.promotion import PromotionAuditRepository
 from promptforge_api.repositories.prompts import PromptRepository
 from promptforge_api.repositories.scans import ScanRepository
 from promptforge_api.routers import prompts as prompts_router
@@ -70,7 +70,7 @@ def block_client(db_session: Session, recorders: SimpleNamespace) -> Iterator[Te
                 PromptRepository(db_session),
                 submit_eval=recorders.evals.append,
             ),
-            PromotionAuditRepository(db_session),
+            AuditRepository(db_session),
             policy=_EVAL_POLICY,
             submit_webhook=recorders.webhooks.append,
             scans=_scan_service(),
@@ -137,7 +137,7 @@ def test_high_risk_scan_blocks_promotion(
 
     # a blocked audit was written...
     blocked = db_session.scalars(
-        select(PromotionAudit).where(PromotionAudit.decision == "blocked")
+        select(AuditEvent).where(AuditEvent.action == "blocked")
     ).all()
     assert len(blocked) == 1
     # ...a webhook fired...

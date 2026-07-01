@@ -67,6 +67,33 @@ class BlockImpact:
     blocks: list[ImpactedRef]
 
 
+class BlockInUseError(Exception):
+    """Raised when deleting a block that a prompt or another block still composes with.
+
+    We refuse the delete rather than cascade it (ADR 0027): a block is shared infrastructure, so
+    deleting it out from under the prompts/blocks that pinned it would silently rewrite their
+    meaning. The *transitive* dependents are carried — by name and version — so the UI can name
+    exactly which references to detach first. Defined here, beside :class:`BlockImpact`, because it
+    carries one.
+    """
+
+    def __init__(self, name: str, impact: BlockImpact) -> None:
+        parts: list[str] = []
+        if impact.prompts:
+            parts.append(
+                "prompts: " + ", ".join(f"{r.name} v{r.version_number}" for r in impact.prompts)
+            )
+        if impact.blocks:
+            parts.append(
+                "blocks: " + ", ".join(f"{r.name} v{r.version_number}" for r in impact.blocks)
+            )
+        super().__init__(
+            f"block '{name}' is in use by {'; '.join(parts)}; detach those references first"
+        )
+        self.name = name
+        self.impact = impact
+
+
 class BlockService:
     """Use-cases for blocks: create, append versions, read history, compose, impact."""
 
@@ -186,7 +213,10 @@ class BlockService:
         affected" answer; the walk is exact (it follows pinned edges) and terminates
         because the version graph is acyclic.
         """
-        block = self._require_block(name)
+        return self._impact_of(self._require_block(name))
+
+    def _impact_of(self, block: Block) -> BlockImpact:
+        """Impact analysis for an already-loaded block (shared by :meth:`impact_of`/delete)."""
         if self._composition is None:
             return BlockImpact(prompts=[], blocks=[])
 
@@ -202,6 +232,22 @@ class BlockService:
             prompts=[ImpactedRef(name=n, version_number=v) for n, v in prompt_rows],
             blocks=[ImpactedRef(name=n, version_number=v) for n, v in block_rows],
         )
+
+    # ----------------------------------------------------------------- delete
+    def delete_block(self, name: str) -> None:
+        """Delete a block — unless a prompt or another block still composes with it (ADR 0027).
+
+        Mirrors :meth:`EvalService.delete_dataset`. Fail-closed: if anything (transitively) depends
+        on this block we refuse with the named dependents rather than cascade the delete and
+        silently rewrite the prompts/blocks that pinned it. A leaf block's versions and its own
+        *outgoing* composition edges go via the existing ORM/FK cascades, so no orphan rows remain.
+        """
+        block = self._require_block(name)
+        impact = self._impact_of(block)
+        if impact.prompts or impact.blocks:
+            raise BlockInUseError(name, impact)
+        self._repository.delete(block)
+        self._repository.flush()
 
     # ----------------------------------------------------------------- shared
     def _pin(self, blocks: list[BlockRef] | None) -> PinnedComposition | None:
