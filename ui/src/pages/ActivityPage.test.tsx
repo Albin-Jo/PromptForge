@@ -81,4 +81,20 @@ describe("ActivityPage", () => {
     expect(screen.getByText("create_version")).toBeInTheDocument();
     expect(screen.getByText("prompt:farewell")).toBeInTheDocument();
   });
+
+  it("renders a friendly label for a known action and the raw verb for an unknown one", () => {
+    setQuery({
+      data: {
+        events: [
+          makeEvent({ action: "version_created", target: "greet v2" }),
+          makeEvent({ id: "evt-2", action: "mystery_action", target: "thing" }),
+        ],
+        total: 2,
+      },
+    });
+    renderPage();
+    expect(screen.getByText("Version created")).toBeInTheDocument();
+    // Unknown action degrades to its raw verb rather than being hidden.
+    expect(screen.getByText("mystery_action")).toBeInTheDocument();
+  });
 });

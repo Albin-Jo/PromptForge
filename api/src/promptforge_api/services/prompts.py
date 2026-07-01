@@ -28,6 +28,7 @@ from promptforge_api.composition.builder import BlockRef, PinnedComposition, pin
 from promptforge_api.composition.resolver import resolve
 from promptforge_api.db.models import Label, Prompt, PromptVersion
 from promptforge_api.exceptions import PromptNotFoundError, VersionNotFoundError
+from promptforge_api.repositories.audit import AuditRepository, record_audit
 from promptforge_api.repositories.composition import CompositionRepository
 from promptforge_api.repositories.prompts import PromptRepository, PromptSummary
 from promptforge_api.services.promotion import (
@@ -117,6 +118,7 @@ class PromptService:
         composition: CompositionRepository | None = None,
         gate: PromotionGate | None = None,
         scans: ScanService | None = None,
+        audits: AuditRepository | None = None,
         cache_ttl_seconds: int = 30,
         cache_stats: CacheStats | None = None,
     ) -> None:
@@ -138,6 +140,9 @@ class PromptService:
         # Scanning is optional in the same way: with it, every version-create triggers a security
         # scan (Sprint 12). Unconditional — unlike the eval gate, scanning needs no golden set.
         self._scans = scans
+        # Auditing is optional in the same way: with it, version-create and non-gated label moves
+        # append an audit_events row (ADR 0028). Without it (most unit tests), those are no-ops.
+        self._audits = audits
         self._cache_ttl_seconds = cache_ttl_seconds
 
     # ----------------------------------------------------------------- create
@@ -151,6 +156,7 @@ class PromptService:
         model_settings: dict[str, Any] | None = None,
         output_schema: dict[str, Any] | None = None,
         blocks: list[BlockRef] | None = None,
+        actor: str = "system",
     ) -> Prompt:
         """Create a prompt and its immutable version 1 in one transaction."""
         if self._repository.get_by_name(name) is not None:
@@ -182,6 +188,12 @@ class PromptService:
         # checked for injection/secrets/PII/jailbreaks before it can ever be promoted.
         if self._scans is not None:
             self._scans.trigger_on_create(prompt, version)
+        record_audit(
+            self._audits,
+            actor=actor,
+            action="version_created",
+            target=f"{name} v{version.version_number}",
+        )
         return self._require_prompt(name)
 
     def add_version(
@@ -193,6 +205,7 @@ class PromptService:
         model_settings: dict[str, Any] | None = None,
         output_schema: dict[str, Any] | None = None,
         blocks: list[BlockRef] | None = None,
+        actor: str = "system",
     ) -> PromptVersion:
         """Append the next immutable version to an existing prompt (ADR 0005)."""
         prompt = self._require_prompt(name)
@@ -222,6 +235,12 @@ class PromptService:
         # Eager scan: kick off this version's security scan now (always — no golden set needed).
         if self._scans is not None:
             self._scans.trigger_on_create(prompt, version)
+        record_audit(
+            self._audits,
+            actor=actor,
+            action="version_created",
+            target=f"{name} v{version.version_number}",
+        )
         return version
 
     # ------------------------------------------------------------------- read
@@ -301,6 +320,15 @@ class PromptService:
                 label=label,
                 actor=actor,
                 detail=detail,
+            )
+        elif current_version is None or current_version.version_number != candidate.version_number:
+            # Non-gated moves aren't seen by the gate, so audit them here (ADR 0028) — but only a
+            # real move: re-setting a label to the version it already points at deploys nothing.
+            record_audit(
+                self._audits,
+                actor=actor,
+                action="label_set",
+                target=f"{name}:{label} → v{candidate.version_number}",
             )
         return PromotionPromoted(label=moved, detail=detail)
 

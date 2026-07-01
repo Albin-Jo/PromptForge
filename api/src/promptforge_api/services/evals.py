@@ -36,6 +36,7 @@ from promptforge_api.exceptions import (
     PromptNotFoundError,
     VersionNotFoundError,
 )
+from promptforge_api.repositories.audit import AuditRepository, record_audit
 from promptforge_api.repositories.evals import EvalRepository
 from promptforge_api.repositories.prompts import PromptRepository
 
@@ -90,6 +91,7 @@ class EvalService:
         *,
         submit_eval: EvalSubmit,
         default_scorers: list[dict[str, Any]] | None = None,
+        audits: AuditRepository | None = None,
     ) -> None:
         self._evals = eval_repo
         self._prompts = prompt_repo
@@ -97,6 +99,9 @@ class EvalService:
         self._default_scorers = (
             default_scorers if default_scorers is not None else DEFAULT_GATING_SCORERS
         )
+        # Optional audit sink: with it, golden-set attach/detach append an audit_events row
+        # (ADR 0028). Without it (unit tests), those are no-ops.
+        self._audits = audits
 
     # ---------------------------------------------------------------- datasets
     def create_dataset(
@@ -166,7 +171,9 @@ class EvalService:
         self._evals.flush()
         _logger.info("dataset_deleted", dataset=name)
 
-    def attach_golden_set(self, *, prompt_name: str, dataset_name: str) -> Prompt:
+    def attach_golden_set(
+        self, *, prompt_name: str, dataset_name: str, actor: str = "system"
+    ) -> Prompt:
         """Point a prompt at the golden set it must clear to be promoted."""
         prompt = self._require_prompt(prompt_name)
         dataset = self._evals.get_dataset_by_name(dataset_name)
@@ -177,9 +184,15 @@ class EvalService:
         prompt.golden_set_id = dataset.id
         self._prompts.flush()
         _logger.info("golden_set_attached", prompt=prompt_name, dataset=dataset_name)
+        record_audit(
+            self._audits,
+            actor=actor,
+            action="golden_set_attached",
+            target=f"{prompt_name} ← golden-set:{dataset_name}",
+        )
         return prompt
 
-    def detach_golden_set(self, *, prompt_name: str) -> Prompt:
+    def detach_golden_set(self, *, prompt_name: str, actor: str = "system") -> Prompt:
         """Clear a prompt's golden set, leaving it with no promotion gate until one is reattached.
 
         Detaching is what lets the now-unused set be deleted (the delete guard, ADR 0024).
@@ -188,6 +201,12 @@ class EvalService:
         prompt.golden_set_id = None
         self._prompts.flush()
         _logger.info("golden_set_detached", prompt=prompt_name)
+        record_audit(
+            self._audits,
+            actor=actor,
+            action="golden_set_detached",
+            target=f"{prompt_name} ⊘ golden-set",
+        )
         return prompt
 
     # ------------------------------------------------------------- triggering

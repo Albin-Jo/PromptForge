@@ -69,17 +69,3 @@ def require_api_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid or missing API key",
         )
-
-
-def promotion_actor(
-    x_api_key: Annotated[str | None, Header()] = None,
-) -> str:
-    """Best-effort "who" for the promotion audit trail (Sprint 11).
-
-    Records *which key* triggered a promotion without leaking it: a short prefix, never the
-    whole key. This is **not** authentication — promotion isn't key-gated in v0.1 (real user
-    identity + authz arrive in Sprint 13); it only attributes the action. No key → ``system``.
-    """
-    if x_api_key:
-        return f"api-key:{x_api_key[:8]}"
-    return "system"

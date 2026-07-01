@@ -23,14 +23,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from promptforge_api.cache import NullCache
+from promptforge_api.db.audit_models import AuditEvent
 from promptforge_api.db.engine import get_session
 from promptforge_api.db.eval_models import EvalRun
-from promptforge_api.db.promotion_models import PromotionAudit
 from promptforge_api.main import create_app
 from promptforge_api.promotion import PromotionPolicy
+from promptforge_api.repositories.audit import AuditRepository
 from promptforge_api.repositories.composition import CompositionRepository
 from promptforge_api.repositories.evals import EvalRepository
-from promptforge_api.repositories.promotion import PromotionAuditRepository
 from promptforge_api.repositories.prompts import PromptRepository
 from promptforge_api.routers import datasets as datasets_router
 from promptforge_api.routers import prompts as prompts_router
@@ -76,7 +76,7 @@ def gate_client(db_session: Session, recorders: SimpleNamespace) -> Iterator[Tes
     def override_prompt_service() -> PromptService:
         gate = PromotionGate(
             _eval_service(),
-            PromotionAuditRepository(db_session),
+            AuditRepository(db_session),
             policy=_TEST_POLICY,
             submit_webhook=submit_webhook,
         )
@@ -187,7 +187,7 @@ def test_worse_prompt_is_refused_with_scores_and_fires_webhook(
     assert any(w["event"] == "promotion.blocked" for w in recorders.webhooks)
     # ...a blocked audit was recorded...
     blocked = db_session.scalars(
-        select(PromotionAudit).where(PromotionAudit.decision == "blocked")
+        select(AuditEvent).where(AuditEvent.action == "blocked")
     ).all()
     assert len(blocked) == 1
     assert blocked[0].to_version_number == 2 and blocked[0].from_version_number == 1
@@ -217,10 +217,12 @@ def test_good_candidate_is_promoted_with_audit_and_webhook(
     assert resp.json()["version"]["version_number"] == 2
     assert any(w["event"] == "promotion.promoted" for w in recorders.webhooks)
     promoted = db_session.scalars(
-        select(PromotionAudit).where(PromotionAudit.decision == "promoted")
+        select(AuditEvent).where(AuditEvent.action == "promoted")
     ).all()
     # two promotions: v1 (seed) and v2.
     assert {a.to_version_number for a in promoted} == {1, 2}
+    # the gate builds the human-readable target string (ADR 0028).
+    assert {a.target for a in promoted} == {"ok:production → v1", "ok:production → v2"}
 
 
 def test_promotion_pending_while_eval_unfinished(gate_client: TestClient) -> None:

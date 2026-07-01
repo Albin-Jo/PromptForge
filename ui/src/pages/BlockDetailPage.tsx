@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Trash2 } from "lucide-react";
 import { useBlock, useBlockImpact } from "../lib/blocks/api";
 import { useCan } from "../lib/auth/AuthContext";
 import { QueryState } from "../components/QueryState";
+import { DeleteBlockDialog } from "../components/DeleteBlockDialog";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -93,6 +95,8 @@ function ImpactCard({ name }: { name: string }) {
 
 function BlockBody({ block }: { block: Block }) {
   const canEdit = useCan("editor");
+  const navigate = useNavigate();
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   // Version history newest-first.
   const versions = [...block.versions].sort((a, b) => b.version_number - a.version_number);
 
@@ -104,11 +108,27 @@ function BlockBody({ block }: { block: Block }) {
           <Badge variant="secondary">{block.role}</Badge>
         </div>
         {canEdit && (
-          <Button asChild>
-            <Link to={`/blocks/${encodeURIComponent(block.name)}/versions/new`}>New version</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild>
+              <Link to={`/blocks/${encodeURIComponent(block.name)}/versions/new`}>New version</Link>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDelete(block.name)}
+              aria-label={`Delete ${block.name}`}
+            >
+              <Trash2 className="size-4" aria-hidden />
+              Delete
+            </Button>
+          </div>
         )}
       </div>
+
+      <DeleteBlockDialog
+        block={pendingDelete}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        onDeleted={() => navigate("/blocks")}
+      />
       {block.description && (
         <p className="mt-1 text-sm text-muted-foreground">{block.description}</p>
       )}

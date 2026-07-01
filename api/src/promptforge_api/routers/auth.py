@@ -14,10 +14,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from promptforge_api.authz import CurrentUserDep, require_admin
+from promptforge_api.authz import CurrentUserDep, audit_actor, require_admin
 from promptforge_api.config import Settings, get_settings
 from promptforge_api.db.engine import get_session
 from promptforge_api.db.user_models import User
+from promptforge_api.repositories.audit import AuditRepository
 from promptforge_api.repositories.users import UserRepository
 from promptforge_api.schemas import (
     AccessTokenResponse,
@@ -47,6 +48,7 @@ def get_auth_service(session: SessionDep, settings: SettingsDep) -> AuthService:
         jwt_secret=settings.jwt_secret,
         access_ttl_seconds=settings.access_token_ttl_seconds,
         refresh_ttl_seconds=settings.refresh_token_ttl_seconds,
+        audits=AuditRepository(session),
     )
 
 
@@ -105,8 +107,13 @@ def list_users(service: AuthServiceDep) -> list[User]:
     "/users",
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
-def create_user(payload: UserCreate, service: AuthServiceDep) -> User:
+def create_user(
+    payload: UserCreate,
+    service: AuthServiceDep,
+    actor_user: Annotated[User | None, Depends(require_admin)],
+) -> User:
     """Create a user (admin only). Email is normalised; the password is stored hashed."""
-    return service.create_user(payload.email, payload.password, payload.role)
+    return service.create_user(
+        payload.email, payload.password, payload.role, actor=audit_actor(actor_user)
+    )
