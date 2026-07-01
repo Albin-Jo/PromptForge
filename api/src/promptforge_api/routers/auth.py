@@ -9,6 +9,7 @@ assembly returns **503** ("auth not configured"), consistent with the open-when-
 posture used elsewhere — the difference is you can't *issue* a token without a secret to sign it.
 """
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -27,6 +28,7 @@ from promptforge_api.schemas import (
     TokenResponse,
     UserCreate,
     UserRead,
+    UserUpdate,
 )
 from promptforge_api.services.auth import AuthService, InvalidCredentialsError, InvalidTokenError
 
@@ -117,3 +119,38 @@ def create_user(
     return service.create_user(
         payload.email, payload.password, payload.role, actor=audit_actor(actor_user)
     )
+
+
+@router.patch("/users/{user_id}", response_model=UserRead)
+def update_user(
+    user_id: uuid.UUID,
+    payload: UserUpdate,
+    service: AuthServiceDep,
+    actor_user: Annotated[User | None, Depends(require_admin)],
+) -> User:
+    """Change a user's role and/or active flag (admin only).
+
+    404 for an unknown id; **409** if the change would remove the last active admin (the
+    self-lockout guard, ADR 0029). A role change or a deactivation revokes the user's outstanding
+    tokens (their next request/refresh 401s and they must log in again).
+    """
+    return service.update_user(
+        user_id,
+        role=payload.role,
+        is_active=payload.is_active,
+        actor=audit_actor(actor_user),
+    )
+
+
+@router.post("/users/{user_id}/revoke", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_user_tokens(
+    user_id: uuid.UUID,
+    service: AuthServiceDep,
+    actor_user: Annotated[User | None, Depends(require_admin)],
+) -> None:
+    """Revoke all of a user's outstanding tokens (admin only) — "log them out everywhere".
+
+    A leaked-credential response that leaves the account's role and active state untouched
+    (ADR 0029). 404 for an unknown id.
+    """
+    service.revoke_tokens(user_id, actor=audit_actor(actor_user))

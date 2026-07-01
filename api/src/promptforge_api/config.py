@@ -125,8 +125,9 @@ class Settings(BaseSettings):
     # local run needs neither. MUST be set (a long random string) in any deployment with users.
     jwt_secret: str | None = None
     # Access tokens are short-lived (exposure window); refresh tokens are long-lived and only
-    # mint new access tokens. Refresh tokens are stateless/non-revocable in v0.1 — the 7-day TTL
-    # bounds a leak (ADR 0018). Both env-overridable.
+    # mint new access tokens. Both are revocable via a per-user token_version claim (ADR 0029,
+    # superseding the "non-revocable" part of ADR 0018): bumping the user's token_version
+    # invalidates every outstanding token; the 7-day TTL is the fallback bound. Env-overridable.
     access_token_ttl_seconds: int = 1800  # 30 minutes
     refresh_token_ttl_seconds: int = 604800  # 7 days
 

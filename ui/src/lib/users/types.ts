@@ -10,3 +10,10 @@ export interface UserCreate {
   password: string;
   role: "admin" | "editor";
 }
+
+// Request body for PATCH /auth/users/{id} (Sprint 31). Both fields optional — a caller changes
+// role, active flag, or both; the API rejects an empty patch. Email/password aren't editable here.
+export interface UserUpdate {
+  role?: "admin" | "editor";
+  is_active?: boolean;
+}

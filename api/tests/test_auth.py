@@ -8,9 +8,11 @@ an editor. Also pins the open-when-unconfigured posture (no ``jwt_secret`` → l
 The ``auth_client`` and ``make_user`` fixtures live in conftest (shared with the authz suite).
 """
 
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+import jwt
 import pytest
 from conftest import AUTH_SECRET
 from fastapi.testclient import TestClient
@@ -18,7 +20,7 @@ from pydantic import ValidationError
 
 from promptforge_api.config import Settings
 from promptforge_api.db.user_models import User
-from promptforge_api.tokens import create_token
+from promptforge_api.tokens import InvalidTokenError, create_token, decode_token
 
 
 def _login(client: TestClient, email: str, password: str):
@@ -234,6 +236,258 @@ def test_refresh_is_rejected_for_a_disabled_user(
     response = auth_client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
 
     assert response.status_code == 401
+
+
+# --- Revocable tokens via token_version (ADR 0029) -------------------------------------------
+
+
+def test_bumped_token_version_invalidates_access_token(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    """A previously-valid access token stops working once the user's token_version is bumped."""
+    user = make_user("alice@example.com", "pw-123456")
+    tokens = _login(auth_client, "alice@example.com", "pw-123456").json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    assert auth_client.get("/auth/me", headers=headers).status_code == 200  # valid before revoke
+
+    user.token_version += 1  # revoke (what update_user / the revoke endpoint will do)
+
+    assert auth_client.get("/auth/me", headers=headers).status_code == 401
+
+
+def test_bumped_token_version_invalidates_refresh_token(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    """A bumped token_version also kills an outstanding refresh token, not just the access token."""
+    user = make_user("alice@example.com", "pw-123456")
+    tokens = _login(auth_client, "alice@example.com", "pw-123456").json()
+
+    user.token_version += 1
+
+    response = auth_client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+
+    assert response.status_code == 401
+
+
+def test_reauth_after_revoke_issues_a_working_token(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    """After a revoke, logging in again mints a token stamped at the new version — and it works."""
+    user = make_user("alice@example.com", "pw-123456")
+    _login(auth_client, "alice@example.com", "pw-123456")
+    user.token_version += 1
+
+    fresh = _login(auth_client, "alice@example.com", "pw-123456").json()
+    response = auth_client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {fresh['access_token']}"}
+    )
+
+    assert response.status_code == 200
+
+
+def test_access_token_without_version_claim_is_treated_as_zero(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    """A token minted before ADR 0029 carries no 'ver' claim; it must still match a v0 user."""
+    user = make_user("alice@example.com", "pw-123456")
+    legacy = jwt.encode(
+        {
+            "sub": str(user.id),
+            "role": user.role,
+            "type": "access",
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
+        },
+        AUTH_SECRET,
+        algorithm="HS256",
+    )
+
+    response = auth_client.get("/auth/me", headers={"Authorization": f"Bearer {legacy}"})
+
+    assert response.status_code == 200
+
+
+def test_decode_token_missing_version_claim_defaults_to_zero():
+    """decode_token treats an absent 'ver' claim as version 0 (backward compatibility)."""
+    legacy = jwt.encode(
+        {
+            "sub": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+            "role": "editor",
+            "type": "access",
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
+        },
+        AUTH_SECRET,
+        algorithm="HS256",
+    )
+
+    claims = decode_token(legacy, secret=AUTH_SECRET, expected_type="access")
+
+    assert claims.token_version == 0
+
+
+def test_decode_token_rejects_a_non_integer_version_claim():
+    """A malformed 'ver' claim is a broken token, not a version-0 one → InvalidTokenError."""
+    bad = jwt.encode(
+        {
+            "sub": "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+            "role": "editor",
+            "type": "access",
+            "ver": "not-an-int",
+            "iat": datetime.now(UTC),
+            "exp": datetime.now(UTC) + timedelta(minutes=30),
+        },
+        AUTH_SECRET,
+        algorithm="HS256",
+    )
+
+    with pytest.raises(InvalidTokenError):
+        decode_token(bad, secret=AUTH_SECRET, expected_type="access")
+
+
+# --- Admin user management: PATCH + revoke (Sprint 31 / ADR 0029) -----------------------------
+
+
+def _admin_session(
+    client: TestClient, make_user: Callable[..., User]
+) -> tuple[User, dict[str, str]]:
+    """Create an admin, log in, and return (the admin user, its auth header)."""
+    admin = make_user("admin@example.com", "pw-123456", role="admin")
+    tokens = _login(client, "admin@example.com", "pw-123456").json()
+    return admin, {"Authorization": f"Bearer {tokens['access_token']}"}
+
+
+def test_admin_can_change_a_user_role(auth_client: TestClient, make_user: Callable[..., User]):
+    _, headers = _admin_session(auth_client, make_user)
+    bob = make_user("bob@example.com", "pw-123456", role="editor")
+
+    response = auth_client.patch(f"/auth/users/{bob.id}", headers=headers, json={"role": "admin"})
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "admin"
+
+
+def test_admin_can_deactivate_and_reactivate_a_user(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    _, headers = _admin_session(auth_client, make_user)
+    bob = make_user("bob@example.com", "pw-123456", role="editor")
+
+    off = auth_client.patch(f"/auth/users/{bob.id}", headers=headers, json={"is_active": False})
+    assert off.status_code == 200 and off.json()["is_active"] is False
+
+    on = auth_client.patch(f"/auth/users/{bob.id}", headers=headers, json={"is_active": True})
+    assert on.status_code == 200 and on.json()["is_active"] is True
+
+
+def test_patch_unknown_user_is_404(auth_client: TestClient, make_user: Callable[..., User]):
+    _, headers = _admin_session(auth_client, make_user)
+
+    response = auth_client.patch(
+        f"/auth/users/{uuid.uuid4()}", headers=headers, json={"role": "admin"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_patch_empty_body_is_422(auth_client: TestClient, make_user: Callable[..., User]):
+    """An empty patch is a client error, not a silent no-op."""
+    _, headers = _admin_session(auth_client, make_user)
+    bob = make_user("bob@example.com", "pw-123456")
+
+    assert auth_client.patch(f"/auth/users/{bob.id}", headers=headers, json={}).status_code == 422
+
+
+def test_editor_cannot_update_a_user(auth_client: TestClient, make_user: Callable[..., User]):
+    make_user("ed@example.com", "pw-123456", role="editor")
+    tokens = _login(auth_client, "ed@example.com", "pw-123456").json()
+    bob = make_user("bob@example.com", "pw-123456")
+
+    response = auth_client.patch(
+        f"/auth/users/{bob.id}",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"role": "admin"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_cannot_demote_the_last_active_admin(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    admin, headers = _admin_session(auth_client, make_user)
+
+    response = auth_client.patch(
+        f"/auth/users/{admin.id}", headers=headers, json={"role": "editor"}
+    )
+
+    assert response.status_code == 409
+
+
+def test_cannot_deactivate_the_last_active_admin(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    admin, headers = _admin_session(auth_client, make_user)
+
+    response = auth_client.patch(
+        f"/auth/users/{admin.id}", headers=headers, json={"is_active": False}
+    )
+
+    assert response.status_code == 409
+
+
+def test_can_demote_an_admin_when_another_active_admin_remains(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    _, headers = _admin_session(auth_client, make_user)
+    other = make_user("other-admin@example.com", "pw-123456", role="admin")
+
+    response = auth_client.patch(
+        f"/auth/users/{other.id}", headers=headers, json={"role": "editor"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "editor"
+
+
+def test_role_change_revokes_the_users_outstanding_tokens(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    """A role change bumps token_version, so a token minted before it 401s — forcing re-auth."""
+    _, headers = _admin_session(auth_client, make_user)
+    bob = make_user("bob@example.com", "pw-123456", role="editor")
+    bob_token = _login(auth_client, "bob@example.com", "pw-123456").json()["access_token"]
+    bob_auth = {"Authorization": f"Bearer {bob_token}"}
+    assert auth_client.get("/auth/me", headers=bob_auth).status_code == 200
+
+    auth_client.patch(f"/auth/users/{bob.id}", headers=headers, json={"role": "admin"})
+
+    assert auth_client.get("/auth/me", headers=bob_auth).status_code == 401
+
+
+def test_revoke_endpoint_invalidates_tokens_but_leaves_the_account(
+    auth_client: TestClient, make_user: Callable[..., User]
+):
+    _, headers = _admin_session(auth_client, make_user)
+    bob = make_user("bob@example.com", "pw-123456", role="editor")
+    bob_token = _login(auth_client, "bob@example.com", "pw-123456").json()["access_token"]
+    bob_auth = {"Authorization": f"Bearer {bob_token}"}
+    assert auth_client.get("/auth/me", headers=bob_auth).status_code == 200
+
+    assert auth_client.post(f"/auth/users/{bob.id}/revoke", headers=headers).status_code == 204
+
+    # The old token is dead, but the account is untouched — bob can simply log in again.
+    assert auth_client.get("/auth/me", headers=bob_auth).status_code == 401
+    assert _login(auth_client, "bob@example.com", "pw-123456").status_code == 200
+
+
+def test_revoke_unknown_user_is_404(auth_client: TestClient, make_user: Callable[..., User]):
+    _, headers = _admin_session(auth_client, make_user)
+
+    response = auth_client.post(f"/auth/users/{uuid.uuid4()}/revoke", headers=headers)
+
+    assert response.status_code == 404
 
 
 def test_login_is_503_when_auth_unconfigured(client: TestClient):

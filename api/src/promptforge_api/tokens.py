@@ -38,6 +38,10 @@ class TokenClaims:
     subject: uuid.UUID
     role: str
     token_type: TokenType
+    # The user's token_version at mint time (ADR 0029). A verify compares this against the user's
+    # current column; a mismatch means the token was revoked. Absent on tokens minted before the
+    # claim existed — read as 0 (see decode_token) so they still match a version-0 user.
+    token_version: int = 0
 
 
 def create_token(
@@ -47,17 +51,20 @@ def create_token(
     token_type: TokenType,
     secret: str,
     ttl_seconds: int,
+    token_version: int = 0,
     now: datetime | None = None,
 ) -> str:
     """Mint a signed JWT for *subject* with *role*, expiring *ttl_seconds* from now.
 
-    *now* is injectable so tests can mint an already-expired token without sleeping.
+    *token_version* stamps the user's revocation counter into the token (ADR 0029). *now* is
+    injectable so tests can mint an already-expired token without sleeping.
     """
     issued_at = now or datetime.now(UTC)
     payload = {
         "sub": str(subject),
         "role": role,
         "type": token_type,
+        "ver": token_version,
         "iat": issued_at,
         "exp": issued_at + timedelta(seconds=ttl_seconds),
     }
@@ -87,4 +94,12 @@ def decode_token(token: str, *, secret: str, expected_type: TokenType) -> TokenC
     except ValueError as exc:
         raise InvalidTokenError("token subject is not a valid id") from exc
 
-    return TokenClaims(subject=subject, role=role, token_type=expected_type)
+    # A pre-ADR-0029 token has no "ver" claim; treat it as version 0 so it still matches a
+    # version-0 user. A present-but-non-int claim is a malformed token — reject it.
+    raw_version = payload.get("ver", 0)
+    if not isinstance(raw_version, int) or isinstance(raw_version, bool):
+        raise InvalidTokenError("token version claim is not an integer")
+
+    return TokenClaims(
+        subject=subject, role=role, token_type=expected_type, token_version=raw_version
+    )

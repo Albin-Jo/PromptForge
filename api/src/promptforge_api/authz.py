@@ -70,7 +70,10 @@ def get_current_user(
         refresh_ttl_seconds=settings.refresh_token_ttl_seconds,
     )
     user = service.get_user(claims.subject)
-    if user is None or not user.is_active:
+    # Reject a deleted/disabled user, or a **revoked** token whose stamped version no longer
+    # matches the user's current token_version (ADR 0029). The user load already happened for the
+    # is_active check, so the version comparison is free.
+    if user is None or not user.is_active or claims.token_version != user.token_version:
         raise _UNAUTHENTICATED
     return user
 

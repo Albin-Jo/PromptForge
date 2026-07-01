@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # A prompt name is also a URL path segment (GET /prompts/{name}) and the SDK's
 # lookup key, so we constrain it to a safe slug rather than arbitrary text.
@@ -681,6 +681,24 @@ class UserRead(BaseModel):
     role: str
     is_active: bool
     created_at: datetime
+
+
+class UserUpdate(BaseModel):
+    """Request body for the admin-only ``PATCH /auth/users/{id}``: role and/or active flag.
+
+    Both fields are optional so a caller can change just one, but at least one must be present —
+    an empty patch is a 422, not a silent no-op. Email and password are deliberately *not*
+    editable here (out of scope for v0.1's admin surface).
+    """
+
+    role: Literal["admin", "editor"] | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def _require_at_least_one_field(self) -> "UserUpdate":
+        if self.role is None and self.is_active is None:
+            raise ValueError("provide at least one of: role, is_active")
+        return self
 
 
 class AuditEventResponse(BaseModel):

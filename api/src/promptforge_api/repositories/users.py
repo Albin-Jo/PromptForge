@@ -7,7 +7,7 @@ service is responsible for normalising the email before it reaches here.
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from promptforge_api.db.user_models import User
@@ -40,3 +40,14 @@ class UserRepository:
         """Return every user, newest first (email as a stable tiebreaker for equal timestamps)."""
         stmt = select(User).order_by(User.created_at.desc(), User.email.asc())
         return list(self._session.scalars(stmt).all())
+
+    def count_active_admins(self, *, exclude: uuid.UUID | None = None) -> int:
+        """Count active admins, optionally excluding one id (the self-lockout guard, ADR 0029)."""
+        stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(User.is_active.is_(True), User.role == "admin")
+        )
+        if exclude is not None:
+            stmt = stmt.where(User.id != exclude)
+        return self._session.scalar(stmt) or 0

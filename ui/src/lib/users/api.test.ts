@@ -7,7 +7,13 @@ vi.mock("../api", async (importOriginal) => ({
   apiFetch: vi.fn(),
 }));
 import { apiFetch } from "../api";
-import { createUser, listUsers, userCreateFieldErrors } from "./api";
+import {
+  createUser,
+  listUsers,
+  updateUser,
+  userCreateFieldErrors,
+  userUpdateFieldErrors,
+} from "./api";
 
 const mockedFetch = vi.mocked(apiFetch);
 
@@ -26,6 +32,24 @@ describe("listUsers / createUser", () => {
     expect(mockedFetch).toHaveBeenCalledWith("/auth/users", {
       method: "POST",
       body: { email: "a@example.com", password: "pw-12345678", role: "editor" },
+    });
+  });
+
+  it("PATCHes a role change to the update endpoint", async () => {
+    mockedFetch.mockResolvedValue({} as never);
+    await updateUser("u1", { role: "admin" });
+    expect(mockedFetch).toHaveBeenCalledWith("/auth/users/u1", {
+      method: "PATCH",
+      body: { role: "admin" },
+    });
+  });
+
+  it("PATCHes an active-flag change to the update endpoint", async () => {
+    mockedFetch.mockResolvedValue({} as never);
+    await updateUser("u1", { is_active: false });
+    expect(mockedFetch).toHaveBeenCalledWith("/auth/users/u1", {
+      method: "PATCH",
+      body: { is_active: false },
     });
   });
 });
@@ -55,6 +79,27 @@ describe("userCreateFieldErrors", () => {
     expect(userCreateFieldErrors(new ApiError(500, "boom", null))).toEqual({ form: "boom" });
     expect(userCreateFieldErrors(new Error("network"))).toEqual({
       form: "Could not create the user. Please try again.",
+    });
+  });
+});
+
+describe("userUpdateFieldErrors", () => {
+  it("surfaces a 409 self-lockout as the API's reason (form-level)", () => {
+    const err = new ApiError(409, "cannot remove the last active admin", { detail: "…" });
+    expect(userUpdateFieldErrors(err)).toEqual({
+      form: "cannot remove the last active admin",
+    });
+  });
+
+  it("maps a 404 to a 'user gone' form message", () => {
+    expect(userUpdateFieldErrors(new ApiError(404, "not found", null))).toEqual({
+      form: "That user no longer exists.",
+    });
+  });
+
+  it("falls back to a form-level message for anything else", () => {
+    expect(userUpdateFieldErrors(new Error("network"))).toEqual({
+      form: "Could not update the user. Please try again.",
     });
   });
 });
