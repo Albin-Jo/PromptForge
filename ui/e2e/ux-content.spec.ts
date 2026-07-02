@@ -91,7 +91,8 @@ async function loginViaUi(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page.getByRole("heading", { name: "Prompts" })).toBeVisible();
+  // Login lands on the Overview index; assert the authed shell (each test navigates on from here).
+  await expect(page.getByRole("link", { name: "Prompts", exact: true }).first()).toBeVisible();
 }
 
 // The whole-page overflow check: long content must wrap, not push the layout wider than the

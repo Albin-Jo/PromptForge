@@ -19,7 +19,8 @@ test("dashboards + scan results render seeded data", async ({ page }) => {
   await page.getByLabel("Email").fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page.getByRole("heading", { name: "Prompts" })).toBeVisible();
+  // Login lands on the Overview index; assert the authed shell, then drive to the dashboard below.
+  await expect(page.getByRole("link", { name: "Prompts", exact: true }).first()).toBeVisible();
 
   // --- Dashboard tab: observability + eval ---
   await page.goto(`/prompts/${PROMPT}/dashboard`);

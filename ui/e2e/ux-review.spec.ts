@@ -47,7 +47,8 @@ async function loginViaUi(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(ADMIN_EMAIL);
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page.getByRole("heading", { name: "Prompts" })).toBeVisible();
+  // Login lands on the Overview index; assert the authed shell (each test navigates on from here).
+  await expect(page.getByRole("link", { name: "Prompts", exact: true }).first()).toBeVisible();
 }
 
 test.describe("UX review", () => {
@@ -62,7 +63,9 @@ test.describe("UX review", () => {
       ["desktop", DESKTOP],
     ] as const) {
       await page.setViewportSize(size);
-      await expect(page.getByRole("heading", { name: /sign in to promptforge/i })).toBeVisible();
+      // "Sign in" is a card title (not a heading) after the restyle; the submit button is the
+      // reliable "login card rendered" signal.
+      await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
       const box = await card.boundingBox();
       expect(box, "login card should be laid out").not.toBeNull();
       // Never wider than the viewport (no horizontal overflow), and horizontally centered.
