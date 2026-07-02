@@ -34,7 +34,7 @@ export function TopBar({ onOpenMobileSidebar, onOpenCommand, onLogout }: TopBarP
   const crumbs = buildBreadcrumbs(pathname);
 
   return (
-    <header className="bg-background sticky top-0 z-30 flex h-14 items-center gap-3 border-b px-4">
+    <header className="bg-background/85 supports-[backdrop-filter]:bg-background/70 sticky top-0 z-30 flex h-14 items-center gap-3 border-b px-4 backdrop-blur-md">
       {/* Mobile: open the sidebar sheet */}
       <Button
         variant="ghost"

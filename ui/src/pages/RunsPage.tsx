@@ -13,7 +13,7 @@ export function RunsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">
+      <h1 className="text-2xl font-semibold tracking-tight">
         {name} — v{versionNumber} runs
       </h1>
       {name && (

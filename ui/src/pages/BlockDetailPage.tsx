@@ -104,7 +104,7 @@ function BlockBody({ block }: { block: Block }) {
     <div>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold">{block.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{block.name}</h1>
           <Badge variant="secondary">{block.role}</Badge>
         </div>
         {canEdit && (

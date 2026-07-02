@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandMark } from "@/components/shell/BrandMark";
 
 interface LocationState {
   from?: { pathname: string };
@@ -57,19 +58,38 @@ export function LoginPage() {
   }
 
   return (
-    <div className="bg-background relative flex min-h-screen items-center justify-center px-4">
+    <div className="bg-background relative flex min-h-dvh items-center justify-center overflow-hidden px-4">
+      {/* Ambient cobalt glow — a quiet brand presence behind the card, tuned to read in both themes. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(60% 55% at 50% -5%, oklch(0.6 0.16 252 / 0.14), transparent 70%)",
+        }}
+      />
+
       <div className="absolute right-4 top-4">
         <ThemeToggle />
       </div>
 
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-xl">Sign in to PromptForge</CardTitle>
-          <CardDescription>Enter your credentials to continue.</CardDescription>
-        </CardHeader>
+      <div className="relative w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <BrandMark className="size-11 rounded-xl" />
+          <h1 className="mt-3 text-xl font-semibold tracking-tight">PromptForge</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Prompts as tested, versioned, observable assets.
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-lg">Sign in</CardTitle>
+            <CardDescription>Enter your credentials to continue.</CardDescription>
+          </CardHeader>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            <CardContent className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
@@ -78,6 +98,7 @@ export function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="username"
+                autoFocus
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -111,7 +132,8 @@ export function LoginPage() {
             </Button>
           </CardFooter>
         </form>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

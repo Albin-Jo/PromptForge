@@ -21,7 +21,10 @@ test("log in, create a prompt, and see it in the list", async ({ page }) => {
   await page.getByLabel("Password").fill(ADMIN_PASSWORD);
   await page.getByRole("button", { name: /sign in/i }).click();
 
-  // 3. We land on the prompt list.
+  // 3. A direct /login returns to the index route — the fleet overview — after auth. From there,
+  //    open the prompt registry.
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.getByRole("link", { name: "Prompts", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Prompts" })).toBeVisible();
 
   // 4. Create a new prompt (first version).
@@ -32,7 +35,7 @@ test("log in, create a prompt, and see it in the list", async ({ page }) => {
   await page.getByLabel("Content").fill("Summarize the following text.");
   await page.getByRole("button", { name: /create prompt/i }).click();
 
-  // 5. Back on the list, the new prompt is there.
-  await expect(page).toHaveURL(/\/$/);
+  // 5. Back on the prompt list, the new prompt is there.
+  await expect(page).toHaveURL(/\/prompts$/);
   await expect(page.getByRole("link", { name: promptName })).toBeVisible();
 });

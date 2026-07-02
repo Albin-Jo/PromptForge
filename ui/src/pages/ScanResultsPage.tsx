@@ -76,7 +76,7 @@ export function ScanResultsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-2xl font-semibold tracking-tight">
           {name} — v{versionNumber} security scan
         </h1>
         {/* Navigation back to versions is the breadcrumb's job now (the prompt-name crumb

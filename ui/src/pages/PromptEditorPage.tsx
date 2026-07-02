@@ -93,7 +93,7 @@ export function PromptEditorPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{isEdit ? `Edit: ${name}` : "New prompt"}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{isEdit ? `Edit: ${name}` : "New prompt"}</h1>
       {isEdit && name && (
         <div className="mt-4">
           <PromptTabs name={name} />
